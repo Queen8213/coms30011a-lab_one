@@ -22,9 +22,27 @@ function todayAsISODate(): string {
   return `${year}-${month}-${day}`;
 }
 
-export default function Home() {
+const SORT_COLUMNS = ["topic", "status", "due_date"] as const;
+type SortColumn = (typeof SORT_COLUMNS)[number];
+
+function isSortColumn(value: string | undefined): value is SortColumn {
+  return SORT_COLUMNS.includes(value as SortColumn);
+}
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort: sortParam } = await searchParams;
+  const sort = isSortColumn(sortParam) ? sortParam : undefined;
+
   const tasks = db
-    .prepare("SELECT * FROM tasks WHERE is_archived = 0")
+    .prepare(
+      `SELECT * FROM tasks WHERE is_archived = 0${
+        sort ? ` ORDER BY ${sort}` : ""
+      }`
+    )
     .all() as Task[];
   const today = todayAsISODate();
 
@@ -61,6 +79,19 @@ export default function Home() {
 
           <button type="submit">Add task</button>
         </form>
+
+        <div className="flex gap-4 text-sm">
+          <span>Sort by:</span>
+          <Link href="/?sort=topic" aria-current={sort === "topic"}>
+            Topic
+          </Link>
+          <Link href="/?sort=status" aria-current={sort === "status"}>
+            Status
+          </Link>
+          <Link href="/?sort=due_date" aria-current={sort === "due_date"}>
+            Due date
+          </Link>
+        </div>
 
         <ul>
           {tasks.map((task) => {
