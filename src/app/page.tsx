@@ -1,6 +1,6 @@
 import Link from "next/link";
 import db from "@/lib/db";
-import { createTask } from "./actions";
+import { archiveTask, createTask } from "./actions";
 
 type Task = {
   id: number;
@@ -23,15 +23,20 @@ function todayAsISODate(): string {
 }
 
 export default function Home() {
-  const tasks = db.prepare("SELECT * FROM tasks").all() as Task[];
+  const tasks = db
+    .prepare("SELECT * FROM tasks WHERE is_archived = 0")
+    .all() as Task[];
   const today = todayAsISODate();
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex w-full max-w-2xl flex-col gap-8 py-16 px-8 bg-white dark:bg-black">
-        <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
-          Tasks
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
+            Tasks
+          </h1>
+          <Link href="/archived">View archived</Link>
+        </div>
 
         <form action={createTask} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
@@ -75,8 +80,12 @@ export default function Home() {
                 <p>due_date: {task.due_date}</p>
                 <p>topic: {task.topic}</p>
                 <p>status: {task.status}</p>
-                <p>
+                <p className="flex gap-2">
                   <Link href={`/tasks/${task.id}/edit`}>Edit</Link>
+                  <form action={archiveTask}>
+                    <input type="hidden" name="id" value={task.id} />
+                    <button type="submit">Archive</button>
+                  </form>
                 </p>
               </li>
             );

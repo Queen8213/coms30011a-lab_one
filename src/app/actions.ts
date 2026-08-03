@@ -42,3 +42,16 @@ export async function updateTask(formData: FormData) {
   revalidatePath("/");
   redirect("/");
 }
+
+export async function archiveTask(formData: FormData) {
+  const id = Number(formData.get("id"));
+
+  if (!id) {
+    throw new Error("Task id is required");
+  }
+
+  db.prepare(`UPDATE tasks SET is_archived = 1 WHERE id = ?`).run(id);
+
+  revalidatePath("/");
+  revalidatePath("/archived");
+}
