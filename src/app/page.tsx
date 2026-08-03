@@ -13,8 +13,17 @@ type Task = {
   updated_at: string;
 };
 
+function todayAsISODate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function Home() {
   const tasks = db.prepare("SELECT * FROM tasks").all() as Task[];
+  const today = todayAsISODate();
 
   return (
     <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-black">
@@ -48,19 +57,26 @@ export default function Home() {
         </form>
 
         <ul>
-          {tasks.map((task) => (
-            <li key={task.id}>
-              <p>id: {task.id}</p>
-              <p>title: {task.title}</p>
-              <p>description: {task.description}</p>
-              <p>due_date: {task.due_date}</p>
-              <p>topic: {task.topic}</p>
-              <p>status: {task.status}</p>
-              <p>is_archived: {task.is_archived}</p>
-              <p>created_at: {task.created_at}</p>
-              <p>updated_at: {task.updated_at}</p>
-            </li>
-          ))}
+          {tasks.map((task) => {
+            const isOverdue = task.due_date < today && task.status !== "complete";
+
+            return (
+              <li key={task.id}>
+                <p>
+                  title: {task.title}
+                  {isOverdue && (
+                    <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">
+                      Overdue
+                    </span>
+                  )}
+                </p>
+                <p>description: {task.description}</p>
+                <p>due_date: {task.due_date}</p>
+                <p>topic: {task.topic}</p>
+                <p>status: {task.status}</p>
+              </li>
+            );
+          })}
         </ul>
       </main>
     </div>
