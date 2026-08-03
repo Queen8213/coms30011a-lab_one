@@ -1,3 +1,4 @@
+import Link from "next/link";
 import db from "@/lib/db";
 import { createTask } from "./actions";
 
@@ -74,6 +75,9 @@ export default function Home() {
                 <p>due_date: {task.due_date}</p>
                 <p>topic: {task.topic}</p>
                 <p>status: {task.status}</p>
+                <p>
+                  <Link href={`/tasks/${task.id}/edit`}>Edit</Link>
+                </p>
               </li>
             );
           })}
