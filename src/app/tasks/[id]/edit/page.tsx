@@ -1,5 +1,14 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import db from "@/lib/db";
+import {
+  PageShell,
+  cardClass,
+  inputClass,
+  labelClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from "@/components/ui";
 import { updateTask } from "@/app/actions";
 
 type Task = {
@@ -30,64 +39,85 @@ export default async function EditTaskPage({
   }
 
   return (
-    <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex w-full max-w-2xl flex-col gap-8 py-16 px-8 bg-white dark:bg-black">
-        <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
-          Edit task
-        </h1>
-
-        <form action={updateTask} className="flex flex-col gap-3">
+    <PageShell
+      title="Edit task"
+      action={
+        <Link href="/" className={secondaryButtonClass}>
+          Back to tasks
+        </Link>
+      }
+    >
+      <section className={`${cardClass} hover:shadow-sm`}>
+        <form action={updateTask} className="flex flex-col gap-4">
           <input type="hidden" name="id" value={task.id} />
 
-          <div className="flex flex-col gap-1">
-            <label htmlFor="title">Title</label>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="title" className={labelClass}>
+              Title
+            </label>
             <input
               id="title"
               name="title"
               type="text"
               defaultValue={task.title}
               required
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              className={inputClass}
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label htmlFor="description">Description</label>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="description" className={labelClass}>
+              Description
+            </label>
             <textarea
               id="description"
               name="description"
               defaultValue={task.description ?? ""}
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+              rows={3}
+              className={inputClass}
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label htmlFor="due_date">Due date</label>
-            <input
-              id="due_date"
-              name="due_date"
-              type="date"
-              defaultValue={task.due_date}
-              required
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="due_date" className={labelClass}>
+                Due date
+              </label>
+              <input
+                id="due_date"
+                name="due_date"
+                type="date"
+                defaultValue={task.due_date}
+                required
+                className={inputClass}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="topic" className={labelClass}>
+                Topic
+              </label>
+              <input
+                id="topic"
+                name="topic"
+                type="text"
+                defaultValue={task.topic}
+                required
+                className={inputClass}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label htmlFor="topic">Topic</label>
-            <input
-              id="topic"
-              name="topic"
-              type="text"
-              defaultValue={task.topic}
-              required
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-            />
+          <div className="flex items-center justify-end gap-3 pt-1">
+            <Link href="/" className={secondaryButtonClass}>
+              Cancel
+            </Link>
+            <button type="submit" className={primaryButtonClass}>
+              Save changes
+            </button>
           </div>
-
-          <button type="submit">Save changes</button>
         </form>
-      </main>
-    </div>
+      </section>
+    </PageShell>
   );
 }

@@ -1,5 +1,13 @@
 import Link from "next/link";
 import db from "@/lib/db";
+import {
+  EmptyState,
+  FieldRow,
+  PageShell,
+  StatusPill,
+  cardClass,
+  secondaryButtonClass,
+} from "@/components/ui";
 
 type Task = {
   id: number;
@@ -19,27 +27,41 @@ export default function ArchivedTasksPage() {
     .all() as Task[];
 
   return (
-    <div className="flex flex-col flex-1 items-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex w-full max-w-2xl flex-col gap-8 py-16 px-8 bg-white dark:bg-black">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">
-            Archived tasks
-          </h1>
-          <Link href="/">Back to tasks</Link>
-        </div>
-
-        <ul>
+    <PageShell
+      title="Archived tasks"
+      action={
+        <Link href="/" className={secondaryButtonClass}>
+          Back to tasks
+        </Link>
+      }
+    >
+      {tasks.length === 0 ? (
+        <EmptyState>Nothing archived yet.</EmptyState>
+      ) : (
+        <ul className="flex flex-col gap-4">
           {tasks.map((task) => (
-            <li key={task.id}>
-              <p>title: {task.title}</p>
-              <p>description: {task.description}</p>
-              <p>due_date: {task.due_date}</p>
-              <p>topic: {task.topic}</p>
-              <p>status: {task.status}</p>
+            <li key={task.id} className={`${cardClass} opacity-80`}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                  {task.title}
+                </h3>
+                <StatusPill status={task.status} />
+              </div>
+
+              {task.description && (
+                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                  {task.description}
+                </p>
+              )}
+
+              <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1">
+                <FieldRow label="Due" value={task.due_date} />
+                <FieldRow label="Topic" value={task.topic} />
+              </dl>
             </li>
           ))}
         </ul>
-      </main>
-    </div>
+      )}
+    </PageShell>
   );
 }
