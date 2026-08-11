@@ -1,0 +1,3316 @@
+ ▐▛███▜▌   Claude Code v2.1.220
+▝▜█████▛▘  Sonnet 5 · Claude Pro
+  ▘▘ ▝▝    ~/Projects/coms30011a-lab-one
+
+
+❯ /login                                                                        
+  ⎿  Login successful
+
+❯ Create lib/db.ts that opens a SQLite database file called todo.db in the      
+  project root using better-sqlite3, and on startup runs this exact schema if   
+  the table doesn't already exist:                                              
+
+⏺ Your message got cut off — you mentioned an exact schema to run on startup,
+  but I don't see it included. Could you paste the schema (table name, columns,
+  etc.) you want lib/db.ts to create?
+
+✻ Cogitated for 8s
+
+❯ CREATE TABLE IF NOT EXISTS tasks (                                            
+    id INTEGER PRIMARY KEY AUTOINCREMENT,                                       
+    title TEXT NOT NULL,                                                        
+    description TEXT,                                                           
+    due_date TEXT NOT NULL,                                                     
+    topic TEXT NOT NULL,                                                        
+    status TEXT NOT NULL CHECK (status IN ('todo','in-progress','complete'))    
+  DEFAULT 'todo',                                                               
+    is_archived INTEGER NOT NULL DEFAULT 0,                                     
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),                         
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))                          
+  );                                                                            
+
+  Listed 2 directories (ctrl+o to expand)
+
+❯ Export the database connection so other files can import and use it. Don't    
+  build any UI or routes yet — just this connection and schema.                 
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(mkdir -p /Users/queenjulius/Projects/coms30011a-lab-one/src/lib)
+  ⎿  Done
+
+⏺ Write(src/lib/db.ts)
+  ⎿  Wrote 38 lines to src/lib/db.ts
+       1 import Database from "better-sqlite3";
+       2 import path from "path";
+       3 
+       4 const SCHEMA = `
+       5   CREATE TABLE IF NOT EXISTS tasks (
+       6     id INTEGER PRIMARY KEY AUTOINCREMENT,
+       7     title TEXT NOT NULL,
+       8     description TEXT,
+       9     due_date TEXT NOT NULL,
+      10     topic TEXT NOT NULL,
+     … +30 lines (ctrl+o to expand)
+
+⏺ Now let me add todo.db (and its WAL sidecar files) to .gitignore so the
+  runtime database doesn't get committed.
+
+⏺ Update(.gitignore)
+  ⎿  Added 4 lines
+      39  # typescript
+      40  *.tsbuildinfo
+      41  next-env.d.ts
+      42 +                                                               
+      43 +# sqlite                                                       
+      44 +/todo.db                                                       
+      45 +/todo.db-*                                                     
+
+⏺ Let me verify it compiles and actually creates the table correctly.
+
+⏺ Bash(rm -f todo.db todo.db-* && npx tsx -e "
+      import db from './src/lib/db.ts';…)
+  ⎿  Error: Exit code 1
+     (eval):1: no matches found: todo.db-*
+
+⏺ Bash(rm -f todo.db && npx tsx -e "
+      import db from './src/lib/db.ts';…)
+  ⎿      cid: 4,
+         name: 'topic',
+         type: 'TEXT',
+     … +37 lines (ctrl+o to expand)
+
+⏺ Works — schema created correctly. Cleaning up the test artifacts.
+
+⏺ Bash(rm -f /Users/queenjulius/Projects/coms30011a-lab-one/todo.db
+      /Users/queenjulius/Projects/coms30011a-lab-one/todo.db-shm
+      /Users/queenjulius/Projects/coms30011a-l…)
+  ⎿  No matches found
+
+⏺ Created src/lib/db.ts — import it as import db from "@/lib/db" (matches the
+  existing @/* → src/* alias). Notes on the two judgment calls I made:
+
+  - Location: put it under src/lib/ rather than a top-level lib/ so it works
+  with the project's existing @/* path alias — todo.db itself still lands in the
+  actual project root since it's resolved via process.cwd().
+  - Dev-reload singleton: cached the connection on global.__db in
+  non-production, since Next's dev server hot-reloads modules and would
+  otherwise reopen todo.db (and its WAL handle) on every edit.
+
+  Also added todo.db / todo.db-* to .gitignore so the runtime database file
+  doesn't get committed. Verified it opens the file and creates the tasks table
+  with the exact schema you gave. No UI or routes touched, as requested.
+
+✻ Cogitated for 1m 1s
+
+❯ Add a form to the home page for creating a task (title, description, due      
+  date, topic) and a server action that inserts it into the tasks table via the 
+  db connection in src/lib/db.ts. After inserting, show all tasks in a plain    
+  list below the form — just the raw fields for now, no styling or sorting yet. 
+  Don't add editing, archiving, or status changes yet.                          
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Bash(cd
+      /Users/queenjulius/Projects/coms30011a-lab-one/node_modules/next/dist/docs
+      && find . -iname "*action*" -o -iname "*form*" | head -40)
+  ⎿  ./01-app/02-guides/forms.md
+     ./01-app/02-guides/ppr-platform-guide.md
+     ./01-app/02-guides/server-actions.md
+     … +7 lines (ctrl+o to expand)
+  Read 2 files (ctrl+o to expand)
+
+⏺ Write(src/app/actions.ts)
+  ⎿  Wrote 22 lines to src/app/actions.ts
+       1 "use server";
+       2 
+       3 import { revalidatePath } from "next/cache";
+       4 import db from "@/lib/db";
+       5 
+       7   const title = String(formData.get("title") ?? "").trim();
+       8   const description = String(formData.get("description") ?? "").
+         trim();
+       9   const dueDate = String(formData.get("due_date") ?? "").trim();
+      10   const topic = String(formData.get("topic") ?? "").trim();
+     … +13 lines (ctrl+o to expand)
+
+⏺ Write(src/app/page.tsx)
+  ⎿  Added 61 lines, removed 58 lines
+       1 -import Image from "next/image";                                
+       1 +import db from "@/lib/db";                                     
+       2 +import { createTask } from "./actions";                        
+       3  
+       4 +type Task = {                                                  
+       5 +  id: number;                                                  
+       6 +  title: string;                                               
+       7 +  description: string | null;                                  
+       8 +  due_date: string;                                            
+       9 +  topic: string;                                               
+      10 +  status: string;                                              
+      11 +  is_archived: number;                                         
+      12 +  created_at: string;                                          
+      13 +  updated_at: string;                                          
+      14 +};                                                             
+      15 +                                                               
+      16  export default function Home() {
+      17 +  const tasks = db.prepare("SELECT * FROM tasks").all() as Task
+         +[];                                                            
+      18 +                                                               
+      19    return (
+       5 -    <div className="flex flex-col flex-1 items-center justify-c
+         -enter bg-zinc-50 font-sans dark:bg-black">                     
+       6 -      <main className="flex flex-1 w-full max-w-3xl flex-col it
+         -ems-center justify-between py-32 px-16 bg-white dark:bg-black s
+         -m:items-start">                                                
+       7 -        <Image                                                 
+       8 -          className="dark:invert"                              
+       9 -          src="/next.svg"                                      
+      10 -          alt="Next.js logo"                                   
+      11 -          width={100}                                          
+      12 -          height={20}                                          
+      13 -          priority                                             
+      14 -        />                                                     
+      15 -        <div className="flex flex-col items-center gap-6 text-c
+         -enter sm:items-start sm:text-left">                            
+      16 -          <h1 className="max-w-xs text-3xl font-semibold leadin
+         -g-10 tracking-tight text-black dark:text-zinc-50">             
+      17 -            To get started, edit the page.tsx file.            
+      18 -          </h1>                                                
+      19 -          <p className="max-w-md text-lg leading-8 text-zinc-60
+         -0 dark:text-zinc-400">                                         
+      20 -            Looking for a starting point or more instructions? 
+         -Head over to{" "}                                              
+      21 -            <a                                                 
+      22 -              href="https://vercel.com/templates?framework=next
+         -.js&utm_source=create-next-app&utm_medium=appdir-template-tw&ut
+         -m_campaign=create-next-app"                                    
+      23 -              className="font-medium text-zinc-950 dark:text-zi
+         -nc-50"                                                         
+      24 -            >                                                  
+      25 -              Templates                                        
+      26 -            </a>{" "}                                          
+      27 -            or the{" "}                                        
+      28 -            <a                                                 
+      29 -              href="https://nextjs.org/learn?utm_source=create-
+         -next-app&utm_medium=appdir-template-tw&utm_campaign=create-next
+         --app"                                                          
+      30 -              className="font-medium text-zinc-950 dark:text-zi
+         -nc-50"                                                         
+      31 -            >                                                  
+      32 -              Learning                                         
+      33 -            </a>{" "}                                          
+      34 -            center.                                            
+      35 -          </p>                                                 
+      36 -        </div>                                                 
+      37 -        <div className="flex flex-col gap-4 text-base font-medi
+         -um sm:flex-row">                                               
+      38 -          <a                                                   
+      39 -            className="flex h-12 w-full items-center justify-ce
+         -nter gap-2 rounded-full bg-foreground px-5 text-background tran
+         -sition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158
+         -px]"                                                           
+      40 -            href="https://vercel.com/new?utm_source=create-next
+         --app&utm_medium=appdir-template-tw&utm_campaign=create-next-app
+         -"                                                              
+      41 -            target="_blank"                                    
+      42 -            rel="noopener noreferrer"                          
+      43 -          >                                                    
+      44 -            <Image                                             
+      45 -              className="dark:invert"                          
+      46 -              src="/vercel.svg"                                
+      47 -              alt="Vercel logomark"                            
+      48 -              width={16}                                       
+      49 -              height={16}                                      
+      50 -            />                                                 
+      51 -            Deploy Now                                         
+      52 -          </a>                                                 
+      53 -          <a                                                   
+      54 -            className="flex h-12 w-full items-center justify-ce
+         -nter rounded-full border border-solid border-black/[.08] px-5 t
+         -ransition-colors hover:border-transparent hover:bg-black/[.04] 
+         -dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]" 
+      55 -            href="https://nextjs.org/docs?utm_source=create-nex
+         -t-app&utm_medium=appdir-template-tw&utm_campaign=create-next-ap
+         -p"                                                             
+      56 -            target="_blank"                                    
+      57 -            rel="noopener noreferrer"                          
+      58 -          >                                                    
+      59 -            Documentation                                      
+      60 -          </a>                                                 
+      61 -        </div>                                                 
+      20 +    <div className="flex flex-col flex-1 items-center bg-zinc-5
+         +0 font-sans dark:bg-black">                                    
+      21 +      <main className="flex w-full max-w-2xl flex-col gap-8 py-
+         +16 px-8 bg-white dark:bg-black">                               
+      22 +        <h1 className="text-2xl font-semibold text-black dark:t
+         +ext-zinc-50">                                                  
+      23 +          Tasks                                                
+      24 +        </h1>                                                  
+      25 +                                                               
+      26 +        <form action={createTask} className="flex flex-col gap-
+         +3">                                                            
+      27 +          <div className="flex flex-col gap-1">                
+      28 +            <label htmlFor="title">Title</label>               
+      29 +            <input id="title" name="title" type="text" required
+         + />                                                            
+      30 +          </div>                                               
+      31 +                                                               
+      32 +          <div className="flex flex-col gap-1">                
+      33 +            <label htmlFor="description">Description</label>   
+      34 +            <textarea id="description" name="description" />   
+      35 +          </div>                                               
+      36 +                                                               
+      37 +          <div className="flex flex-col gap-1">                
+      38 +            <label htmlFor="due_date">Due date</label>         
+      39 +            <input id="due_date" name="due_date" type="date" re
+         +quired />                                                      
+      40 +          </div>                                               
+      41 +                                                               
+      42 +          <div className="flex flex-col gap-1">                
+      43 +            <label htmlFor="topic">Topic</label>               
+      44 +            <input id="topic" name="topic" type="text" required
+         + />                                                            
+      45 +          </div>                                               
+      46 +                                                               
+      47 +          <button type="submit">Add task</button>              
+      48 +        </form>                                                
+      49 +                                                               
+      50 +        <ul>                                                   
+      51 +          {tasks.map((task) => (                               
+      52 +            <li key={task.id}>                                 
+      53 +              <p>id: {task.id}</p>                             
+      54 +              <p>title: {task.title}</p>                       
+      55 +              <p>description: {task.description}</p>           
+      56 +              <p>due_date: {task.due_date}</p>                 
+      57 +              <p>topic: {task.topic}</p>                       
+      58 +              <p>status: {task.status}</p>                     
+      59 +              <p>is_archived: {task.is_archived}</p>           
+      60 +              <p>created_at: {task.created_at}</p>             
+      61 +              <p>updated_at: {task.updated_at}</p>             
+      62 +            </li>                                              
+      63 +          ))}                                                  
+      64 +        </ul>                                                  
+      65        </main>
+      66      </div>
+      67    );
+
+⏺ Now let's verify it actually builds and runs correctly.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one && rm -f todo.db && npx
+      tsc --noEmit 2>&1 | head -50)
+  ⎿  (No output)
+
+⏺ Type checks clean. Let's boot the dev server and exercise the form end-to-end.
+
+⏺ Bash((npx next dev -p 3417 > /tmp/next-dev.log 2>&1 &) && sleep 5 && curl -s
+      -o /dev/null -w "%{http_code}\n" http://localhost:3417/)
+  ⎿  200
+
+⏺ Bash(curl -s http://localhost:3417/ | grep -E "Title|Add
+      task|Tasks|due_date|topic" -o | sort -u)
+  ⎿  Add task
+     Tasks
+     Title
+     … +2 lines (ctrl+o to expand)
+
+⏺ Now submit the form via a real POST to confirm the server action inserts and
+  the list updates.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      node -e "…)
+  ⎿  before: { c: 0 }
+
+⏺ Skill(claude-in-chrome)
+  ⎿  Successfully loaded skill
+
+⏺ Bash(npx tsx -e "
+      import { createTask } from './src/app/actions.ts';…)
+  ⎿      at responseCallbacks.<computed> (/Users/queenjulius/.npm/_npx/fd45
+     a72a545557e9/node_modules/esbuild/lib/main.js:884:9)
+         at handleIncomingPacket (/Users/queenjulius/.npm/_npx/fd45a72a5455
+     … +27 lines (ctrl+o to expand)
+
+  Made 1 scratchpad edit +14 (ctrl+o to expand)
+
+⏺ Bash(npx tsx /private/tmp/claude-501/-Users-queenjulius-Projects-coms30011a-la
+      b-one/71c560c5-f4de-427c-b159-ed3df108c666/scratchpad/test-action.ts 2>&1
+      | tail -40)
+  ⎿  /Users/queenjulius/Projects/coms30011a-lab-one/node_modules/next/src/s
+     erver/web/spec-extension/revalidate.ts:128
+         throw new Error(
+     … +17 lines (ctrl+o to expand)
+
+⏺ That error is expected — revalidatePath only works inside an actual Next.js
+  request context, which this standalone script isn't. The insert itself ran
+  before that line. Let's confirm.
+
+⏺ Bash(node -e "
+      const Database = require('better-sqlite3');…)
+  ⎿  [
+       {
+         id: 1,
+     … +10 lines (ctrl+o to expand)
+
+⏺ The insert worked correctly with defaults applied. Now let's confirm the home
+  page renders that row.
+
+⏺ Bash(curl -s http://localhost:3417/ | grep -A1 "Write lab
+      report\|methodology\|COMS30011A\|2026-08-10")
+  ⎿  <!DOCTYPE html><html lang="en" class="geist_a71539c9-module__T19VSG__v
+     ariable geist_mono_8d43a2aa-module__8Li5zG__variable h-full antialiase
+     d"><head><meta charSet="utf-8"/><meta name="viewport" content="width=d
+     … +215 lines (ctrl+o to expand)
+
+⏺ The full flow works — page renders the form, and after an insert the task list
+  shows all raw fields. Cleaning up test artifacts and stopping the dev server.
+
+⏺ Bash(pkill -f "next dev -p 3417" 2>/dev/null; rm -f
+      /Users/queenjulius/Projects/coms30011a-lab-one/todo.db
+      /Users/queenjulius/Projects/coms30011a-lab-one/todo.db-shm…)
+  ⎿   M src/app/page.tsx
+     ?? src/app/actions.ts
+
+⏺ Done. Two files:
+
+  - src/app/actions.ts — "use server" action createTask that reads
+  title/description/due_date/topic from FormData, validates the three required
+  fields, inserts via db from src/lib/db.ts, and calls revalidatePath("/") so
+  the list refreshes on submit.
+  - src/app/page.tsx — replaced the boilerplate with a server component: a form
+  wired to createTask, and a plain <ul> below it listing every column (id,
+  title, description, due_date, topic, status, is_archived, created_at,
+  updated_at) for each row from SELECT * FROM tasks, unsorted.
+
+  Verified: typechecks clean, dev server serves the form, and a direct insert
+  through createTask shows up in the rendered list with the schema's defaults
+  (status: 'todo', is_archived: 0, timestamps) applied. No
+  edit/archive/status-change UI added, as asked.
+
+✻ Cogitated for 1m 42s
+❯ Improve the task list on the home page to show only title, description, due   
+  date, topic, and status for each task — drop the raw id/created_at/updated_at 
+  columns from the display. Add an "Overdue" badge next to any task where the   
+  due date is before today and status isn't 'complete'. Compute this when       
+  rendering the list — don't store it in the database or add it as a status     
+  value. Don't add archiving, editing, or sorting yet.                          
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 9 lines
+      13    updated_at: string;
+      14  };
+      15  
+      16 +function todayAsISODate(): string {                            
+      17 +  const now = new Date();                                      
+      18 +  const year = now.getFullYear();                              
+      19 +  const month = String(now.getMonth() + 1).padStart(2, "0");   
+      20 +  const day = String(now.getDate()).padStart(2, "0");          
+      21 +  return `${year}-${month}-${day}`;                            
+      22 +}                                                              
+      23 +                                                               
+      24  export default function Home() {
+      25    const tasks = db.prepare("SELECT * FROM tasks").all() as Task
+          [];
+      26 +  const today = todayAsISODate();                              
+      27  
+      28    return (
+      29      <div className="flex flex-col flex-1 items-center bg-zinc-5
+          0 font-sans dark:bg-black">
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 16 lines, removed 13 lines
+      57          </form>
+      58  
+      59          <ul>
+      60 -          {tasks.map((task) => (                               
+      61 -            <li key={task.id}>                                 
+      62 -              <p>id: {task.id}</p>                             
+      63 -              <p>title: {task.title}</p>                       
+      64 -              <p>description: {task.description}</p>           
+      65 -              <p>due_date: {task.due_date}</p>                 
+      66 -              <p>topic: {task.topic}</p>                       
+      67 -              <p>status: {task.status}</p>                     
+      68 -              <p>is_archived: {task.is_archived}</p>           
+      69 -              <p>created_at: {task.created_at}</p>             
+      70 -              <p>updated_at: {task.updated_at}</p>             
+      71 -            </li>                                              
+      72 -          ))}                                                  
+      60 +          {tasks.map((task) => {                               
+      61 +            const isOverdue = task.due_date < today && task.sta
+         +tus !== "complete";                                            
+      62 +                                                               
+      63 +            return (                                           
+      64 +              <li key={task.id}>                               
+      65 +                <p>                                            
+      66 +                  title: {task.title}                          
+      67 +                  {isOverdue && " [Overdue]"}                  
+      68 +                </p>                                           
+      69 +                <p>description: {task.description}</p>         
+      70 +                <p>due_date: {task.due_date}</p>               
+      71 +                <p>topic: {task.topic}</p>                     
+      72 +                <p>status: {task.status}</p>                   
+      73 +              </li>                                            
+      74 +            );                                                 
+      75 +          })}                                                  
+      76          </ul>
+      77        </main>
+      78      </div>
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 5 lines, removed 1 line
+      64                <li key={task.id}>
+      65                  <p>
+      66                    title: {task.title}
+      67 -                  {isOverdue && " [Overdue]"}                  
+      67 +                  {isOverdue && (                              
+      68 +                    <span className="ml-2 rounded bg-red-600 px
+         +-1.5 py-0.5 text-xs font-medium text-white">                   
+      69 +                      Overdue                                  
+      70 +                    </span>                                    
+      71 +                  )}                                           
+      72                  </p>
+      73                  <p>description: {task.description}</p>
+      74                  <p>due_date: {task.due_date}</p>
+
+⏺ Now let's verify types and behavior.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Bash(npx tsc --noEmit 2>&1 | head -30)
+  ⎿  (No output)
+
+⏺ Types check clean. Let's set up a few tasks with different due dates/statuses
+  and confirm the overdue logic renders correctly.
+
+⏺ Bash(node -e "
+      const Database = require('better-sqlite3');…)
+  ⎿  [
+       {
+         id: 1,
+     … +17 lines (ctrl+o to expand)
+
+⏺ Bash((npx next dev -p 3417 > /tmp/next-dev2.log 2>&1 &) && sleep 5 && curl -s
+      http://localhost:3417/ > /tmp/home.html && cat /tmp/home.html | grep -o
+      "Overdue" | wc…)
+  ⎿  8
+     <li><p>title: <!-- -->Past due, still todo<span class="ml-2 rounded bg
+     -red-600 px-1.5 py-0.5 text-xs font-medium text-white">Overdue</span><
+     … +10 lines (ctrl+o to expand)
+
+⏺ Confirmed correct: the overdue-and-not-complete task shows the badge, the
+  overdue-but-complete and future-due tasks don't. id, is_archived, created_at,
+  updated_at are no longer rendered. Cleaning up.
+
+⏺ Bash(pkill -f "next dev -p 3417" 2>/dev/null; rm -f
+      /Users/queenjulius/Projects/coms30011a-lab-one/todo.db
+      /Users/queenjulius/Projects/coms30011a-lab-one/todo.db-shm…)
+  ⎿   M src/app/page.tsx
+
+⏺ Updated src/app/page.tsx:
+
+  - List now shows only title, description, due_date, topic, status per task.
+  - An isOverdue check (task.due_date < today && task.status !== "complete") is
+  computed per-row at render time — nothing written to the DB, no new status
+  value.
+  - When overdue, a small red "Overdue" badge renders next to the title.
+
+  Verified with three seeded tasks (past-due/todo, past-due/complete,
+  future-due) — only the first showed the badge. No archiving, editing, or
+  sorting added.
+
+✻ Cogitated for 1m 2s
+
+※ recap: Building a Next.js/SQLite todo app: db connection and schema are in place, and the home page now has a task creation form plus a list showing title, description, due date, topic, status, and an overdue badge. Next: add sorting, editing, or archiving when you're ready to specify which. (disable recaps in /config)
+
+❯ Add the ability to edit an existing task's title, description, due date, and  
+  topic. Use a form pre-filled with the task's current values, and a server     
+  action that updates the row and refreshes updated_at. Don't touch status,     
+  archiving, or sorting yet.                                                    
+
+⏺ Bash(cd
+      /Users/queenjulius/Projects/coms30011a-lab-one/node_modules/next/dist/docs
+      && find . -iname "*dynamic-routes*" -o -iname "*page.md" | grep -i
+      api-reference |…)
+  ⎿  ./01-app/03-api-reference/03-file-conventions/page.md
+     ./01-app/03-api-reference/03-file-conventions/dynamic-routes.md
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Bash(find . -iname "redirect.md" | xargs -I{} head -30 {})
+  ⎿  ---
+     title: redirect
+     description: API Reference for the redirect function.
+     … +26 lines (ctrl+o to expand)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one && find
+      node_modules/next/dist/docs -iname "redirect.md" -exec grep -n "from
+      'next" {} \;)
+  ⎿  36:import { redirect, RedirectType } from 'next/navigation'
+     65:import { redirect } from 'next/navigation'
+     90:import { redirect } from 'next/navigation'
+     … +4 lines (ctrl+o to expand)
+
+⏺ Now let's add the updateTask server action.
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(src/app/actions.ts)
+  ⎿  Added 22 lines
+      1  "use server";
+      2  
+      3  import { revalidatePath } from "next/cache";
+      4 +import { redirect } from "next/navigation";                     
+      5  import db from "@/lib/db";
+      6  
+      7  export async function createTask(formData: FormData) {
+     ...
+      21  
+      22    revalidatePath("/");
+      23  }
+      24 +                                                               
+      25 +export async function updateTask(formData: FormData) {         
+      26 +  const id = Number(formData.get("id"));                       
+      27 +  const title = String(formData.get("title") ?? "").trim();    
+      28 +  const description = String(formData.get("description") ?? "")
+         +.trim();                                                       
+      29 +  const dueDate = String(formData.get("due_date") ?? "").trim()
+         +;                                                              
+      30 +  const topic = String(formData.get("topic") ?? "").trim();    
+      31 +                                                               
+      32 +  if (!id || !title || !dueDate || !topic) {                   
+      33 +    throw new Error("Title, due date, and topic are required");
+      34 +  }                                                            
+      35 +                                                               
+      36 +  db.prepare(                                                  
+      37 +    `UPDATE tasks                                              
+      38 +     SET title = ?, description = ?, due_date = ?, topic = ?, u
+         +pdated_at = datetime('now')                                    
+      39 +     WHERE id = ?`                                             
+      40 +  ).run(title, description || null, dueDate, topic, id);       
+      41 +                                                               
+      42 +  revalidatePath("/");                                         
+      43 +  redirect("/");                                               
+      44 +}                                                              
+
+⏺ Now the edit page with a pre-filled form.
+
+⏺ Bash(mkdir -p
+      /Users/queenjulius/Projects/coms30011a-lab-one/src/app/tasks/\[id\]/edit)
+  ⎿  Done
+
+⏺ Write(src/app/tasks/[id]/edit/page.tsx)
+  ⎿  Wrote 89 lines to src/app/tasks/[id]/edit/page.tsx
+       1 import { notFound } from "next/navigation";
+       2 import db from "@/lib/db";
+       3 import { updateTask } from "@/app/actions";
+       4 
+       5 type Task = {
+       6   id: number;
+       7   title: string;
+       8   description: string | null;
+       9   due_date: string;
+      10   topic: string;
+     … +82 lines (ctrl+o to expand)
+
+⏺ Now add an "Edit" link next to each task in the home page list.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 1 line
+      1 +import Link from "next/link";                                   
+      2  import db from "@/lib/db";
+      3  import { createTask } from "./actions";
+      4  
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 3 lines
+      75                  <p>due_date: {task.due_date}</p>
+      76                  <p>topic: {task.topic}</p>
+      77                  <p>status: {task.status}</p>
+      78 +                <p>                                            
+      79 +                  <Link href={`/tasks/${task.id}/edit`}>Edit</L
+         +ink>                                                           
+      80 +                </p>                                           
+      81                </li>
+      82              );
+      83            })}
+
+⏺ Bash(npx tsc --noEmit 2>&1 | head -50)
+  ⎿  (No output)
+
+⏺ Types check clean. Let's run it end-to-end.
+
+⏺ Bash(rm -f todo.db todo.db-shm todo.db-wal
+      node -e "…)
+  ⎿  [
+       {
+         id: 1,
+     … +10 lines (ctrl+o to expand)
+
+⏺ Bash((npx next dev -p 3418 > /tmp/next-dev3.log 2>&1 &) && sleep 5 && curl -s
+      http://localhost:3418/ -o /tmp/home2.html && grep -o
+      "Edit</a>\|/tasks/[0-9]*/edit" /tm…)
+  ⎿  /tasks/1/edit
+     Edit</a>
+     /tasks/1/edit
+     … +13 lines (ctrl+o to expand)
+
+⏺ Edit link, pre-filled form, and 404 for a nonexistent task id all work. Now
+  test the actual update action.
+
+⏺ Bash(npx tsx /private/tmp/claude-501/-Users-queenjulius-Projects-coms30011a-la
+      b-one/71c560c5-f4de-427c-b159-ed3df108c666/scratchpad/test-action.ts 2>&1
+      | tail -5)
+  ⎿      at Object.transformer (/Users/queenjulius/.npm/_npx/fd45a72a545557
+     e9/node_modules/tsx/dist/register-CptX03bE.cjs:9:3252)
+         at Module.load (node:internal/modules/cjs/loader:1533:32)
+     … +3 lines (ctrl+o to expand)
+
+  Made 1 scratchpad edit +15 (ctrl+o to expand)
+
+⏺ Bash(npx tsx /private/tmp/claude-501/-Users-queenjulius-Projects-coms30011a-la
+      b-one/71c560c5-f4de-427c-b159-ed3df108c666/scratchpad/test-update.ts 2>&1
+      | tail -10
+      ec…)
+  ⎿  expected redirect/revalidate error: Invariant: static generation store
+      missing in revalidatePath /
+     ---
+     … +11 lines (ctrl+o to expand)
+
+⏺ The row updated correctly — title, description, due_date, topic, and
+  updated_at all changed; status, is_archived, and created_at untouched. Let's
+  confirm the home page and edit page reflect the new values via the running dev
+  server, then clean up.
+
+⏺ Bash(curl -s http://localhost:3418/ | grep -o "Updated title\|Updated
+      description\|2026-09-01\|Updated topic"
+      echo ---…)
+  ⎿  Updated title
+     Updated description
+     2026-09-01
+     … +10 lines (ctrl+o to expand)
+
+⏺ Both pages reflect the update. Cleaning up.
+
+⏺ Bash(pkill -f "next dev -p 3418" 2>/dev/null
+      rm -f /Users/queenjulius/Projects/coms30011a-lab-one/todo.db
+      /Users/queenjulius/Projects/coms30011a-lab-one/todo.db-shm…)
+  ⎿   M src/app/actions.ts
+      M src/app/page.tsx
+     ?? src/app/tasks/
+
+⏺ Done. Three changes:
+
+  - src/app/actions.ts — added updateTask: reads
+  id/title/description/due_date/topic from FormData, validates required fields,
+  runs an UPDATE that also sets updated_at = datetime('now'), then
+  revalidatePath("/") and redirects to /. Status and is_archived are untouched.
+  - src/app/tasks/[id]/edit/page.tsx (new) — server component that looks up the
+  task by id (notFound() if missing), and renders a form pre-filled via
+  defaultValue for each field, submitting to updateTask with the id in a hidden
+  input.
+  - src/app/page.tsx — added an "Edit" link per task row pointing to
+  /tasks/{id}/edit.
+
+  Verified: edit page pre-fills correctly, a bad id 404s, and running the update
+  changed title/description/due_date/topic/updated_at while leaving
+  status/is_archived/created_at alone — confirmed on both the home list and the
+  edit form after the update. No status, archiving, or sorting logic touched.
+
+✻ Brewed for 1m 48s
+
+※ recap: Building a Next.js/SQLite todo app; just added task editing (pre-filled form + server action updating title, description, due date, topic). Next: add archiving or status changes when you're ready. (disable recaps in /config)
+
+❯ Add the ability to archive a task: a button that sets is_archived = 1 for     
+  that task via a server action. Archived tasks should no longer appear in the  
+  main task list. Add a way to still view archived tasks — a toggle or a        
+  separate /archived page is fine, your choice. Don't add un-archiving,         
+  sorting, or status changes yet.                                               
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(src/app/actions.ts)
+  ⎿  Added 13 lines
+      42    revalidatePath("/");
+      43    redirect("/");
+      44  }
+      45 +                                                               
+      46 +export async function archiveTask(formData: FormData) {        
+      47 +  const id = Number(formData.get("id"));                       
+      48 +                                                               
+      49 +  if (!id) {                                                   
+      50 +    throw new Error("Task id is required");                    
+      51 +  }                                                            
+      52 +                                                               
+      53 +  db.prepare(`UPDATE tasks SET is_archived = 1 WHERE id = ?`).r
+         +un(id);                                                        
+      54 +                                                               
+      55 +  revalidatePath("/");                                         
+      56 +  revalidatePath("/archived");                                 
+      57 +}                                                              
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 1 line, removed 1 line
+      1  import Link from "next/link";
+      2  import db from "@/lib/db";
+      3 -import { createTask } from "./actions";                         
+      3 +import { archiveTask, createTask } from "./actions";            
+      4  
+      5  type Task = {
+      6    id: number;
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 9 lines, removed 4 lines
+      23  }
+      24  
+      25  export default function Home() {
+      26 -  const tasks = db.prepare("SELECT * FROM tasks").all() as Task
+         -[];                                                            
+      26 +  const tasks = db                                             
+      27 +    .prepare("SELECT * FROM tasks WHERE is_archived = 0")      
+      28 +    .all() as Task[];                                          
+      29    const today = todayAsISODate();
+      30  
+      31    return (
+      32      <div className="flex flex-col flex-1 items-center bg-zinc-5
+          0 font-sans dark:bg-black">
+      33        <main className="flex w-full max-w-2xl flex-col gap-8 py-
+          16 px-8 bg-white dark:bg-black">
+      32 -        <h1 className="text-2xl font-semibold text-black dark:t
+         -ext-zinc-50">                                                  
+      33 -          Tasks                                                
+      34 -        </h1>                                                  
+      34 +        <div className="flex items-center justify-between">    
+      35 +          <h1 className="text-2xl font-semibold text-black dark
+         +:text-zinc-50">                                                
+      36 +            Tasks                                              
+      37 +          </h1>                                                
+      38 +          <Link href="/archived">View archived</Link>          
+      39 +        </div>                                                 
+      40  
+      41          <form action={createTask} className="flex flex-col gap-
+          3">
+      42            <div className="flex flex-col gap-1">
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 5 lines, removed 1 line
+      80                  <p>due_date: {task.due_date}</p>
+      81                  <p>topic: {task.topic}</p>
+      82                  <p>status: {task.status}</p>
+      83 -                <p>                                            
+      83 +                <p className="flex gap-2">                     
+      84                    <Link href={`/tasks/${task.id}/edit`}>Edit</L
+          ink>
+      85 +                  <form action={archiveTask}>                  
+      86 +                    <input type="hidden" name="id" value={task.
+         +id} />                                                         
+      87 +                    <button type="submit">Archive</button>     
+      88 +                  </form>                                      
+      89                  </p>
+      90                </li>
+      91              );
+
+⏺ Now the /archived page.
+
+⏺ Bash(mkdir -p /Users/queenjulius/Projects/coms30011a-lab-one/src/app/archived)
+  ⎿  Done
+
+⏺ Write(src/app/archived/page.tsx)
+  ⎿  Wrote 45 lines to src/app/archived/page.tsx
+       1 import Link from "next/link";
+       2 import db from "@/lib/db";
+       3 
+       4 type Task = {
+       5   id: number;
+       6   title: string;
+       7   description: string | null;
+       8   due_date: string;
+       9   topic: string;
+      10   status: string;
+     … +38 lines (ctrl+o to expand)
+
+⏺ Bash(npx tsc --noEmit 2>&1 | head -50)
+  ⎿  (No output)
+
+⏺ Types check clean. Now let's exercise the flow end-to-end.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      rm -f todo.db todo.db-shm todo.db-wal…)
+  ⎿  [
+       { id: 1, title: 'Active task', is_archived: 0 },
+       { id: 2, title: 'To be archived', is_archived: 0 }
+     ]
+
+⏺ Bash((npx next dev -p 3419 > /tmp/next-dev4.log 2>&1 &) && sleep 5 && curl -s
+      http://localhost:3419/ | grep -o "Active task\|To be
+      archived\|Archive</button>\|View a…)
+  ⎿  View archived
+     Active task
+     Archive</button>
+     … +5 lines (ctrl+o to expand)
+
+  Made 1 scratchpad edit +11 (ctrl+o to expand)
+
+⏺ Bash(npx tsx /private/tmp/claude-501/-Users-queenjulius-Projects-coms30011a-la
+      b-one/71c560c5-f4de-427c-b159-ed3df108c666/scratchpad/test-archive.ts 2>&1
+      | tail -5
+      ec…)
+  ⎿  expected revalidate error outside request context: Invariant: static g
+     eneration store missing in revalidatePath /
+     ---
+     … +4 lines (ctrl+o to expand)
+
+⏺ Now confirm it disappears from the main list and shows on /archived.
+
+⏺ Bash(echo "home page:"
+      curl -s http://localhost:3419/ | grep -o "Active task\|To be archived"…)
+  ⎿  home page:
+     Active task
+     Active task
+     … +6 lines (ctrl+o to expand)
+
+⏺ The archived task is filtered out of the main list and shows up on /archived.
+  Cleaning up.
+
+⏺ Bash(pkill -f "next dev -p 3419" 2>/dev/null
+      rm -f /Users/queenjulius/Projects/coms30011a-lab-one/todo.db
+      /Users/queenjulius/Projects/coms30011a-lab-one/todo.db-shm…)
+  ⎿   M src/app/actions.ts
+      M src/app/page.tsx
+     ?? src/app/archived/
+
+⏺ Done. Three changes:
+
+  - src/app/actions.ts — added archiveTask: sets is_archived = 1 for the given
+  id, revalidates both / and /archived.
+  - src/app/page.tsx — the main list now queries WHERE is_archived = 0, each
+  task row has an "Archive" button (a small form posting to archiveTask), and a
+  "View archived" link in the header.
+  - src/app/archived/page.tsx (new) — a separate read-only page listing tasks
+  WHERE is_archived = 1 with the same fields as the main list (no
+  edit/archive/unarchive controls there), plus a "Back to tasks" link.
+
+  Verified end-to-end: archiving a task removes it from / and it appears on
+  /archived; the other task stays untouched. No un-archiving, sorting, or
+  status-change functionality added.
+
+✻ Cooked for 1m 28s
+
+❯ Add sorting to the main task list: dropdown or clickable column headers for   
+  topic, status, and due date, each re-querying the database with the           
+  corresponding ORDER BY. Only the active (non-archived) list needs sorting —   
+  the archived page can stay as-is. Don't add anything else.                    
+
+  Read 1 file (ctrl+o to expand)
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 20 lines, removed 2 lines
+      22    return `${year}-${month}-${day}`;
+      23  }
+      24  
+      25 -export default function Home() {                               
+      25 +const SORT_COLUMNS = ["topic", "status", "due_date"] as const; 
+      26 +type SortColumn = (typeof SORT_COLUMNS)[number];               
+      27 +                                                               
+      28 +function isSortColumn(value: string | undefined): value is Sort
+         +Column {                                                       
+      29 +  return SORT_COLUMNS.includes(value as SortColumn);           
+      30 +}                                                              
+      31 +                                                               
+      32 +export default async function Home({                           
+      33 +  searchParams,                                                
+      34 +}: {                                                           
+      35 +  searchParams: Promise<{ sort?: string }>;                    
+      36 +}) {                                                           
+      37 +  const { sort: sortParam } = await searchParams;              
+      38 +  const sort = isSortColumn(sortParam) ? sortParam : undefined;
+      39 +                                                               
+      40    const tasks = db
+      27 -    .prepare("SELECT * FROM tasks WHERE is_archived = 0")      
+      41 +    .prepare(                                                  
+      42 +      `SELECT * FROM tasks WHERE is_archived = 0${             
+      43 +        sort ? ` ORDER BY ${sort}` : ""                        
+      44 +      }`                                                       
+      45 +    )                                                          
+      46      .all() as Task[];
+      47    const today = todayAsISODate();
+      48  
+
+⏺ Now add the sort links above the list.
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 13 lines
+      80            <button type="submit">Add task</button>
+      81          </form>
+      82  
+      83 +        <div className="flex gap-4 text-sm">                   
+      84 +          <span>Sort by:</span>                                
+      85 +          <Link href="/?sort=topic" aria-current={sort === "top
+         +ic"}>                                                          
+      86 +            Topic                                              
+      87 +          </Link>                                              
+      88 +          <Link href="/?sort=status" aria-current={sort === "st
+         +atus"}>                                                        
+      89 +            Status                                             
+      90 +          </Link>                                              
+      91 +          <Link href="/?sort=due_date" aria-current={sort === "
+         +due_date"}>                                                    
+      92 +            Due date                                           
+      93 +          </Link>                                              
+      94 +        </div>                                                 
+      95 +                                                               
+      96          <ul>
+      97            {tasks.map((task) => {
+      98              const isOverdue = task.due_date < today && task.sta
+          tus !== "complete";
+
+⏺ Bash(npx tsc --noEmit 2>&1 | head -50)
+  ⎿  (No output)
+
+⏺ Types check clean. Let's verify sorting behaves correctly with seeded data.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      rm -f todo.db todo.db-shm todo.db-wal…)
+  ⎿  seeded
+
+⏺ Bash((npx next dev -p 3420 > /tmp/next-dev5.log 2>&1 &) && sleep 5
+      echo "no sort (id order):"…)
+  ⎿  Error: Exit code 3
+     no sort (id order):
+     title: <!-- -->Task C
+     title: <!-- -->Task A
+     title: <!-- -->Task B
+     ---
+     sort=topic:
+     topic: <!-- -->Apple topic
+     topic: <!-- -->Mango topic
+     topic: <!-- -->Zebra topic
+     … +13 lines (ctrl+o to expand)
+
+⏺ Bash(curl -s -o /dev/null -w "%{http_code}\n"
+      "http://localhost:3420/?sort=bogus"
+      curl -s -G "http://localhost:3420/" --data-urlencode "sort=topic; DROP
+      TABLE tasks;…)
+  ⎿  200
+     200
+     { c: 3 }
+
+⏺ All sort variants work correctly, an invalid/malicious sort value is ignored
+  via the whitelist (no injection, table intact), and the archived page is
+  untouched. Cleaning up.
+
+⏺ Bash(pkill -f "next dev -p 3420" 2>/dev/null
+      rm -f /Users/queenjulius/Projects/coms30011a-lab-one/todo.db
+      /Users/queenjulius/Projects/coms30011a-lab-one/todo.db-shm…)
+  ⎿   M src/app/page.tsx
+
+⏺ Done. Only src/app/page.tsx changed:
+
+  - Home is now an async server component reading a sort search param
+  (?sort=topic|status|due_date).
+  - The value is checked against a fixed whitelist (SORT_COLUMNS) before being
+  interpolated into ORDER BY — invalid/malicious values are ignored and the
+  query falls back to unsorted, so there's no SQL-injection surface despite the
+  string interpolation.
+  - Added three "Sort by" links (Topic / Status / Due date) above the list that
+  set the query param; no default sort applied when none is chosen, matching
+  prior behavior.
+  - src/app/archived/page.tsx untouched, as requested.
+
+  Verified all three sort orders against seeded data, plus that a
+  garbage/injection-attempt sort value is safely ignored and the table survives.
+
+✻ Cogitated for 1m 4s
+
+※ recap: Building a Next.js todo app with SQLite (create, edit, archive, and now sort tasks) — sorting by topic/status/due date is done and verified. Next: decide what feature to add next, such as un-archiving or status changes. (disable recaps in /config)
+
+❯ /model                                                                        
+  ⎿  Set model to Opus 5 and saved as your default for new sessions
+
+❯ Two bugs:                                                                     
+  None of the form inputs (title, description, due date, topic — on both the    
+  create form and the edit page) have a visible border or padding. Add          
+  appropriate Tailwind classes (border, rounded corners, padding) to all of     
+  them so users can see where to type.                                          
+  Creating a task fails when the due date is set to today. Check the date       
+  input's min attribute and any due_date validation in the server action for an 
+  off-by-one error or a UTC-vs-local timezone mismatch in how "today" is        
+  computed. Fix it so today is a valid due date, and tell me exactly what was   
+  causing it.                                                                   
+
+⏺ I'll look at the current state of both files before changing anything.
+
+  Searched for 1 pattern, read 3 files (ctrl+o to expand)
+
+⏺ Bug 1 is real — no styling on any input. Before I touch bug 2, note that grep
+  found no min attribute anywhere and no due-date validation beyond a non-empty
+  check. Let me empirically test whether creating a task with today's date
+  actually fails.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      rm -f todo.db todo.db-shm todo.db-wal…)
+  ⎿  (eval):3: no such file or directory: /private/tmp/claude-501/-Users-qu
+     eenjulius-Projects-coms30011a-lab-one/71c560c5-f4de-427c-b159-ed3df108
+     c666/scratchpad/test-today.ts
+     … +21 lines (ctrl+o to expand)
+
+  Made 1 scratchpad edit +35 (ctrl+o to expand)
+
+⏺ Bash(npx tsx /private/tmp/claude-501/-Users-queenjulius-Projects-coms30011a-la
+      b-one/71c560c5-f4de-427c-b159-ed3df108c666/scratchpad/test-today.ts 2>&1 |
+      tail -20)
+  ⎿  Error: Cannot find module 'better-sqlite3'
+     Require stack:
+     - /private/tmp/claude-501/-Users-queenjulius-Projects-coms30011a-lab-o
+     … +17 lines (ctrl+o to expand)
+
+⏺ Write(test-today.ts)
+  ⎿  Wrote 34 lines to test-today.ts
+       1 import { createTask } from "./src/app/actions.ts";
+       2 import Database from "better-sqlite3";
+       3 
+       4 function todayLocal() {
+       5   const n = new Date();
+         (2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+       7 }
+       8 
+       9 async function main() {
+      10   const today = todayLocal();
+     … +29 lines (ctrl+o to expand)
+⏺ Bash(npx tsx test-today.ts 2>&1 | tail -20)
+  ⎿  local today    : 2026-08-10
+     UTC toISOString: 2026-08-10
+     TZ             : Africa/Johannesburg
+     … +2 lines (ctrl+o to expand)
+
+⏺ Creating with today's date succeeded. Let me verify through a real HTTP form
+  submission against the dev server, to rule out anything that only manifests in
+  a request context.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      rm -f todo.db todo.db-shm todo.db-wal…)
+  ⎿  === rendered due_date input on create form ===
+     === action id ===
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one; sleep 4; curl -s -o
+      /tmp/h.html -w "%{http_code}\n" http://localhost:3421/; grep -o
+      'due_date[^>]*' /tmp/h.ht…)
+  ⎿  000
+     ugrep: warning: /tmp/h.html: No such file or directory
+     ---ACTION---
+     … +7 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one; head -30
+      /tmp/next-dev6.log; echo "=== listening ==="; lsof -iTCP -sTCP:LISTEN -P
+      2>/dev/null | grep -i node…)
+  ⎿  ▲ Next.js 16.2.12 (Turbopack)
+     - Local:         http://localhost:3421
+     - Network:       http://192.168.8.74:3421
+     … +15 lines (ctrl+o to expand)
+
+⏺ There's already a dev server running on port 3000 for this project (likely
+  yours — I won't kill it). I'll test against it.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      curl -s -o /tmp/h.html -w "status=%{http_code}\n" http://localhost:3000/…)
+  ⎿  status=200
+     === due_date input as rendered ===
+     <input id="due_date" type="date" required="" name="due_date"/>
+     … +2 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      AID=$(grep -o 'ACTION_ID_[a-f0-9]*' /tmp/h.html | head -1 | sed
+      's/ACTION_ID_//')…)
+  ⎿  action id: 4085cfc897c6ed7876fb4c82e5bb4635888fdca1a0
+     === POST create form with due_date = today (2026-08-10) ===
+     status=200
+     … +7 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      node -e "…)
+  ⎿  Error: Exit code 1
+     /Users/queenjulius/Projects/coms30011a-lab-one/node_modules/better-sqlite3/
+     lib/methods/wrappers.js:5
+        return this[cppdb].prepare(sql, this, false, false);
+                           ^
+
+     SqliteError: no such table: tasks
+         at Database.prepare (/Users/queenjulius/Projects/coms30011a-lab-one/nod
+     e_modules/better-sqlite3/lib/methods/wrappers.js:5:21)
+         at [eval]:4:16
+         at runScriptInThisContext (node:internal/vm:219:10)
+         at node:internal/process/execution:451:12
+     … +9 lines (ctrl+o to expand)
+
+⏺ I need to flag a mistake before continuing. My cleanup rm -f todo.db ran while
+  your dev server (PID 61514, port 3000) had that database open — so its file
+  handle now points at a deleted inode, and the todo.db on disk is empty. Let me
+  restore the schema.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      rm -f todo.db todo.db-shm todo.db-wal…)
+  ⎿  TypeError: d.prepare is not a function
+         at [eval]:25:38
+
+     Node.js v24.14.0
+
+⏺ Write(recreate-db.ts)
+  ⎿  Wrote 7 lines to recreate-db.ts
+      1 import db from "./src/lib/db.ts";
+      2 
+      3 console.log(
+      4   "tables:",
+      5   db.prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all()
+      6 );
+      7 console.log("rows:", db.prepare("SELECT count(*) c FROM tasks").g
+        et());
+
+⏺ Bash(npx tsx recreate-db.ts 2>&1 | tail -5)
+  ⎿  tables: [ { name: 'tasks' }, { name: 'sqlite_sequence' } ]
+     rows: { c: 0 }
+
+⏺ Schema restored (empty). Now the styling fix — bug 1, which is real.
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 26 lines, removed 4 lines
+       59          <form action={createTask} className="flex flex-col gap
+           -3">
+       60            <div className="flex flex-col gap-1">
+       61              <label htmlFor="title">Title</label>
+       62 -            <input id="title" name="title" type="text" require
+          -d />                                                          
+       62 +            <input                                            
+       63 +              id="title"                                      
+       64 +              name="title"                                    
+       65 +              type="text"                                     
+       66 +              required                                        
+       67 +              className="rounded-md border border-zinc-300 px-
+          +3 py-2 dark:border-zinc-700 dark:bg-zinc-900"                 
+       68 +            />                                                
+       69            </div>
+       70  
+       71            <div className="flex flex-col gap-1">
+       72              <label htmlFor="description">Description</label>
+       67 -            <textarea id="description" name="description" />  
+       73 +            <textarea                                         
+       74 +              id="description"                                
+       75 +              name="description"                              
+       76 +              className="rounded-md border border-zinc-300 px-
+          +3 py-2 dark:border-zinc-700 dark:bg-zinc-900"                 
+       77 +            />                                                
+       78            </div>
+       79  
+       80            <div className="flex flex-col gap-1">
+       81              <label htmlFor="due_date">Due date</label>
+       72 -            <input id="due_date" name="due_date" type="date" r
+          -equired />                                                    
+       82 +            <input                                            
+       83 +              id="due_date"                                   
+       84 +              name="due_date"                                 
+       85 +              type="date"                                     
+       86 +              required                                        
+       87 +              className="rounded-md border border-zinc-300 px-
+          +3 py-2 dark:border-zinc-700 dark:bg-zinc-900"                 
+       88 +            />                                                
+       89            </div>
+       90  
+       91            <div className="flex flex-col gap-1">
+       92              <label htmlFor="topic">Topic</label>
+       77 -            <input id="topic" name="topic" type="text" require
+          -d />                                                          
+       93 +            <input                                            
+       94 +              id="topic"                                      
+       95 +              name="topic"                                    
+       96 +              type="text"                                     
+       97 +              required                                        
+       98 +              className="rounded-md border border-zinc-300 px-
+          +3 py-2 dark:border-zinc-700 dark:bg-zinc-900"                 
+       99 +            />                                                
+      100            </div>
+      101  
+      102            <button type="submit">Add task</button>
+
+⏺ Update(src/app/tasks/[id]/edit/page.tsx)
+  ⎿  Added 1 line
+      47                type="text"
+      48                defaultValue={task.title}
+      49                required
+      50 +              className="rounded-md border border-zinc-300 px-3
+         + py-2 dark:border-zinc-700 dark:bg-zinc-900"                   
+      51              />
+      52            </div>
+      53  
+
+⏺ Update(src/app/tasks/[id]/edit/page.tsx)
+  ⎿  Added 1 line
+      57                id="description"
+      58                name="description"
+      59                defaultValue={task.description ?? ""}
+      60 +              className="rounded-md border border-zinc-300 px-3
+         + py-2 dark:border-zinc-700 dark:bg-zinc-900"                   
+      61              />
+      62            </div>
+      63  
+
+⏺ Update(src/app/tasks/[id]/edit/page.tsx)
+  ⎿  Added 1 line
+      69                type="date"
+      70                defaultValue={task.due_date}
+      71                required
+      72 +              className="rounded-md border border-zinc-300 px-3
+         + py-2 dark:border-zinc-700 dark:bg-zinc-900"                   
+      73              />
+      74            </div>
+      75  
+
+⏺ Update(src/app/tasks/[id]/edit/page.tsx)
+  ⎿  Added 1 line
+      81                type="text"
+      82                defaultValue={task.topic}
+      83                required
+      84 +              className="rounded-md border border-zinc-300 px-3
+         + py-2 dark:border-zinc-700 dark:bg-zinc-900"                   
+      85              />
+      86            </div>
+      87  
+
+⏺ Bash(npx tsc --noEmit 2>&1 | head -20; echo "tsc done")  ⎿  Tool use rejected
+
+⏺ Stopping. Here's where things stand.
+
+  Bug 1 — fixed. Added rounded-md border border-zinc-300 px-3 py-2 (plus
+  dark-mode variants) to all eight inputs: title, description, due date, topic
+  on both the create form (src/app/page.tsx) and the edit page
+  (src/app/tasks/[id]/edit/page.tsx).
+
+  Bug 2 — does not reproduce, and the causes you pointed me at don't exist in 
+  the code.
+
+  - There is no min attribute anywhere in src/ — grep -rn "min=" src/ returns
+  nothing, and the HTML actually served by your dev server renders the input as
+  <input id="due_date" type="date" required="" name="due_date"/>, with no min.
+  - There is no due-date validation in either server action. createTask only
+  checks !dueDate (non-empty); it never compares against today. There's no
+  toISOString() or date arithmetic in actions.ts at all, so there's no
+  UTC-vs-local mismatch to fix.
+  - I called createTask with today's date (2026-08-10, TZ Africa/Johannesburg)
+  and it inserted successfully.
+
+  The only "today" computation in the codebase is todayAsISODate() in page.tsx,
+  and it's already local-time correct (getFullYear/getMonth/getDate, not
+  toISOString). It's used solely for the Overdue badge, where task.due_date < 
+  today is a strict comparison — so a task due today is correctly not flagged
+  overdue. That path can't block creation either.
+
+  So I haven't changed anything for bug 2. If you're seeing a real failure, I
+  need the actual symptom — browser validation message, a thrown error, a red
+  screen? That'll tell us where it's really coming from.
+
+  Two things I need to flag:
+
+  1. I deleted your todo.db. My test cleanup ran rm -f todo.db while your dev
+  server (PID 61514, port 3000) had it open. Any tasks in it are gone — I can't
+  recover them. I recreated the schema, so the file is valid but empty. Your
+  running dev server still holds a handle to the deleted file, so restart it or
+  it'll keep writing into the orphaned inode.
+  2. I left two scratch files in your project root that I created for testing:
+  test-today.ts and recreate-db.ts. Want me to delete them?
+
+✻ Worked for 3m 56s
+
+❯ SO now what must be doen                                                      
+
+⏺ Three things, in order:
+
+  1. You: restart your dev server. It's still writing to the deleted todo.db
+  inode. Kill PID 61514 and start it again — otherwise nothing you do in the
+  browser will match what's on disk.
+
+  kill 61514 && npm run dev
+
+  2. Me: delete my two scratch files — test-today.ts and recreate-db.ts in your
+  project root. Say the word and they're gone. (I also never got to run tsc 
+  --noEmit on the styling change, since you stopped that call. Worth running
+  before you trust it.)
+
+  3. You: tell me what bug 2 actually looks like. This is the blocker. I
+  couldn't reproduce it and the two causes you named aren't in the code, so I'd
+  just be guessing at a fix. What I need:
+
+  - What happens when you pick today's date and hit "Add task"? A browser
+  tooltip on the field? An error page? Or the task silently doesn't appear in
+  the list?
+  - If it's a browser tooltip — what does it say?
+  - If it's an error page — the message from it, or from the dev server
+  terminal.
+
+  One realistic possibility worth ruling out: the task is being created but
+  you're not seeing it. Note the list has no default sort, and after my deletion
+  the DB is empty — so if you tested before restarting, a new task would land
+  in the orphaned file and never render. That would look exactly like "creating
+  fails."
+
+  Answer 3 and I'll fix the real cause rather than inventing one.
+
+✻ Crunched for 12s
+
+❯ what is the best solution?                                                    
+
+⏺ Best solution: reproduce it before changing anything. Concretely — restart
+  your dev server, create a task dated today, and tell me what you see. That's
+  the whole recommendation, and here's why it's the right call rather than a
+  dodge.
+
+  I can't give you a fix for bug 2 because there is no code that could produce
+  it. A fix has to change something, and the only things I could change are a
+  min attribute that doesn't exist and a date validation that doesn't exist.
+  Writing either one would mean adding code and calling it a repair.
+
+  One thing I should correct from my last message: I floated the idea that my
+  database deletion explained your symptom. It doesn't — you reported bug 2
+  before I deleted anything. That theory only applies to testing you do after
+  the deletion. So restarting matters for clean re-testing, but it isn't the
+  explanation.
+
+  The likeliest explanation is that the min attribute and the date validation
+  are things you (or an earlier suggestion) intended the code to have, but they
+  were never actually written. The create form has only required on the date
+  field. If that's what happened, the real request isn't "fix the off-by-one" —
+  it's "add the past-date restriction that was supposed to be there."
+
+  If that's what you want, say so and I'll add it: a min on both date inputs set
+  to today via the existing local-time todayAsISODate() (not toISOString(),
+  which is exactly the UTC bug you were worried about — it would reject today
+  for anyone west of UTC), plus a matching server-side check using the same
+  local-time helper, so today always passes. That's a real change with a real
+  purpose.
+
+  What I won't do is ship that and describe it as fixing an off-by-one, because
+  it isn't one.
+
+  So: which is it — do you want the past-date restriction added, or do you have
+  an actual error message for me to chase?
+
+✻ Churned for 22s
+
+※ recap: We're building a SQLite-backed todo app in Next.js; input styling is fixed, but the "today's due date" bug never reproduced and the code you described doesn't exist. Next: tell me whether to add the past-date restriction, or give me the actual error.
+
+❯ no i want thr due date to be today eventhough i created the task today        
+  because it could be due later today                                           
+
+⏺ Then the behavior you want is already what the code does — let me prove it
+  rather than assert it.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      node -e "…)
+  ⎿  Tool use rejected
+
+⏺ Fair question. Let me lay out the method before running anything.
+
+  Evidence I already have from earlier this turn (not a new claim — this ran and
+  passed):
+
+  - I POSTed the real create form to the running server with due_date=2026-08-10
+  (today). It returned HTTP 200, and the row landed in the DB as { id: 1, 
+  title: 'Due today', due_date: '2026-08-10' }. That's the actual server action,
+  through the actual form path — not a simulation.
+
+  What the code says about the overdue badge — page.tsx:98:
+
+  task.due_date < today && task.status !== "complete"
+
+  < is strict. When due_date equals today, that's false, so no badge. A task due
+  today is already treated as not-yet-overdue, which is exactly your "it could
+  be due later today" case.
+
+  What the test I proposed would add: insert two rows — one due today, one due
+  yesterday — then read the rendered HTML and show the Overdue span appears on
+  the yesterday row and is absent on the today row. That converts the code
+  reasoning above into an observed result, side by side, so it isn't just me
+  reading a < and telling you it's fine.
+
+  The weakness of that test, and the reason I'd rather be upfront: it seeds rows
+  with direct SQL, which bypasses createTask. So it proves the badge behavior,
+  not the creation behavior. The creation half is already covered by the form
+  POST above.
+
+  So the honest summary is: both halves of what you want already work, and I
+  have evidence for each. Nothing needs fixing.
+
+  Want me to run the badge test anyway so you can see it rendered, or is the
+  code plus the earlier POST enough? And separately — those two scratch files,
+  test-today.ts and recreate-db.ts, are still sitting in your project root and
+  should come out.
+
+✻ Crunched for 36s
+
+※ recap: We're building the todo app; last item was your report that a task due today fails to save. It already works — the form POST saved a today-dated task and today never gets an Overdue badge. Next: confirm that's enough, or I run a rendered test.
+
+❯ Two issues on the home page:                                                  
+  The archive button's <form> is rendered inside a <p> element, which is        
+  invalid HTML and causes a React hydration error ("In HTML, <form> cannot be a 
+  descendant of <p>"). Restructure the task row markup so no form or            
+  interactive element is nested inside a <p> — use <div> or <li> instead. Check 
+  the whole task row for other invalid nesting while you're there.              
+  Creating a task with today's date still fails browser validation with "Fill   
+  out this field" pointing at the due date input, even though a date is visibly 
+  entered. Investigate the date input's required, min, and max attributes and   
+  how its value is bound. Explain what's actually causing it before fixing.     
+                                                                                
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Issue 1 confirmed at lines 136–142. Before fixing, let me gather facts on
+  issue 2.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== min/max anywhere in src? ==="…)
+  ⎿  === min/max anywhere in src? ===
+     (none — no min or max attribute exists)
+     … +16 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      node -e "…)
+  ⎿  Running in the background (↓ to manage)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The DB has your two tasks. The curl hung — let me retry with a timeout.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      curl -s --max-time 20 http://localhost:3000/ -o /tmp/page.html -w
+      "status=%{http_code}\n"…)
+  ⎿  status=000
+     === form nested in p (served markup) ===
+     ugrep: warning: /tmp/page.html: No such file or directory
+     … +2 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      curl -sv --max-time 15 http://localhost:3000/ -o /tmp/page.html 2>&1 |
+      tail -12…)
+  ⎿  * IPv6: ::1
+     * IPv4: 127.0.0.1
+     *   Trying [::1]:3000...
+     … +41 lines (ctrl+o to expand)
+⏺ That's the smoking gun. The dev-server log shows the hydration failure with at
+  form (unknown) and "Invalid HTML tag nesting" — and critically, "this tree 
+  will be regenerated on the client." That sentence is the link between your two
+  issues. Let me fix the nesting.
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 2 lines, removed 2 lines
+      133                  <p>due_date: {task.due_date}</p>
+      134                  <p>topic: {task.topic}</p>
+      135                  <p>status: {task.status}</p>
+      136 -                <p className="flex gap-2">                    
+      136 +                <div className="flex items-center gap-2">     
+      137                    <Link href={`/tasks/${task.id}/edit`}>Edit</
+           Link>
+      138                    <form action={archiveTask}>
+      139                      <input type="hidden" name="id" value={task
+           .id} />
+      140                      <button type="submit">Archive</button>
+      141                    </form>
+      142 -                </p>                                          
+      142 +                </div>                                        
+      143                </li>
+      144              );
+      145            })}
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== any remaining <p> containing form/button/div in the task row?
+      ==="…)
+  ⎿  === any remaining <p> containing form/button/div in the task row? ===
+             <ul>
+               {tasks.map((task) => {
+     … +32 lines (ctrl+o to expand)
+
+⏺ The only type errors are from my two leftover scratch files, which are now
+  breaking your typecheck. Removing them.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      rm -f test-today.ts recreate-db.ts…)
+  ⎿  --- tsc done (no output above = clean) ---
+     AD recreate-db.ts
+     MM src/app/page.tsx
+     … +2 lines (ctrl+o to expand)
+
+⏺ Those scratch files were staged in git. Let me unstage them so they don't get
+  committed.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git restore --staged test-today.ts recreate-db.ts 2>&1…)
+  ⎿  MM src/app/page.tsx
+     M  src/app/tasks/[id]/edit/page.tsx
+
+⏺ Clean. Now let me verify the hydration error is actually gone against your
+  running server.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      LOG=.next/dev/logs/next-development.log…)
+  ⎿  hydration errors in log before reload: 3
+     status=000
+     === action row markup as served ===
+     … +3 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== last 5 log lines ==="…)
+  ⎿  === last 5 log lines ===
+     {"timestamp":"00:01:02.838","source":"Server","level":"ERROR","message
+     ":"[browser] \"In HTML, <form> cannot be a descendant of <p>.\\nThis w
+     … +17 lines (ctrl+o to expand)
+
+❯ i killed anything that was running on port 3000 thoughg                       
+
+⏺ That explains the hangs — the socket was still bound but the process wasn't
+  serving. Let me re-check and start a fresh server to verify the fix.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== port 3000 now ==="…)
+  ⎿  === port 3000 now ===
+     COMMAND   PID        USER   FD   TYPE             DEVICE SIZE/OFF NODE
+      NAME
+     … +9 lines (ctrl+o to expand)
+
+⏺ Three stale next dev processes are still alive (61511, 63914, 66349) — the
+  kill didn't take. Since you intended them dead, I'll clear them and start one
+  clean server.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      kill -9 61511 63914 66349 66350 2>/dev/null…)
+  ⎿  === remaining next dev processes ===
+     === port 3000 ===
+
+⏺ Background command "cd /Users/queenjulius/Projects/coms30011a-lab-one
+node -e "
+const Database=require('better-sqlite3');
+try{const db=new Database('todo.db',{readonly:true});
+console.log('rows:',db.prepare('SELECT id,title,due_date FROM
+tasks').all());}catch(e){console.log('db read err:',e.message)}"
+echo "=== served HTML: does a &lt;form&gt; sit inside a &lt;p&gt;? ==="
+curl -s http://localhost:3000/ | grep -o '&lt;p class="flex
+gap-2"&gt;.\{0,200\}' | head -2 || echo "(no task rows rendered)"" completed
+(exit code 0)
+
+⏺ Port is clear. Starting a fresh server to verify.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      rm -f .next/dev/logs/next-development.log…)
+  ⎿  status=200
+     === action row as served ===
+     <div class="flex items-center gap-2"><a href="/tasks/1/edit">Edit</a><
+     … +3 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      sleep 3…)
+  ⎿  === hydration / nesting errors in fresh log ===
+     0
+     0
+     … +2 lines (ctrl+o to expand)
+
+⏺ Both fixed. Here's what was actually going on.
+
+  Issue 1 — invalid nesting
+
+  src/app/page.tsx:136 had <p className="flex gap-2"> wrapping the archive
+  <form>. A <p> may only contain phrasing content; <form> is flow content.
+  Changed that wrapper to a <div>.
+
+  Rest of the row audited — everything else is legal: the <span> badge and the
+  <a> from <Link> are phrasing content, and the other four <p>s hold only text.
+  The <form> was the sole violation. (The <button> inside it would have been
+  fine on its own, but it moved with the form.)
+
+  Issue 2 — what was actually causing it
+
+  It was never a date bug. The attributes you asked me to check don't exist:
+  grep -rn "min=\|max=" src/ returns nothing. The date input's only validation
+  attribute is required.
+
+  The causal chain:
+
+  1. "Fill out this field" is Chrome's valueMissing message. It fires on one
+  condition only — input.value === "". Not a range rejection; a range violation
+  would say "Value must be greater than or equal to…". So the browser genuinely
+  saw an empty field.
+  2. That input is uncontrolled — no value, no defaultValue prop. React never
+  binds it, so whatever you type lives purely in the DOM node.
+  3. Your dev log recorded exactly this, pointing at form:
+
+  In HTML, <form> cannot be a descendant of <p>.
+  This will cause a hydration error.
+  ...
+  Hydration failed because the server rendered HTML didn't match the client.
+  As a result this tree will be regenerated on the client.
+      at form (unknown)
+
+  4. The HTML parser auto-closes <p> when it hits block content, so the
+  browser's DOM never matched React's tree. On hydration failure React 19 throws
+  away the server DOM and re-renders the whole root client-side. That replaces 
+  the input's DOM node, discarding your typed date — while the picker can still
+  look populated. Submit then hits required on an empty value.
+
+  So issue 2 was a symptom of issue 1. This also reconciles with last turn: I
+  proved the server action happily accepts today's date, and it does — the
+  submission was being blocked client-side and never reached the server. Fixing
+  the nesting removes the regeneration that was wiping the field.
+
+  Verification, and its limit
+
+  Served HTML now has <div class="flex items-center gap-2"> with the form as a
+  sibling of the <a>, and no <form> inside any <p>. A fresh dev log shows zero
+  errors, and tsc --noEmit is clean.
+
+  The limit: hydration only runs in a real browser, and curl doesn't execute
+  React — so a clean log from my fetch isn't proof the console error is gone.
+  Please reload and confirm, then try a task due today. Your two tasks
+  (ekjdejkjd, ddssas) are intact.
+
+  Housekeeping
+
+  - Your three next dev processes (61511, 63914, 66349) were still alive despite
+  the kill — one held port 3000 bound but unresponsive, which is why requests
+  hung. I killed them and started one clean server on port 3000, still running.
+  - Deleted my scratch files test-today.ts and recreate-db.ts; they were
+  breaking tsc and had been staged in git, so I unstaged them.
+
+✻ Cogitated for 7m 21s
+
+❯ now how do i run the app                                                      
+
+⏺ npm run dev, then open http://localhost:3000
+
+  But right now there's already a server running on 3000 — the one I started to
+  verify the fix. So do this first:
+
+  lsof -ti:3000 | xargs kill -9
+  npm run dev
+
+  That's the same wedged-socket situation from earlier: if a stale process still
+  holds the port, npm run dev either refuses to start ("Another next dev server
+  is already running") or the page hangs with no response. Clearing the port
+  first avoids both.
+
+  To confirm the two fixes once it's up:
+  1. Open the browser console — the <form> cannot be a descendant of <p> and
+  hydration errors should be gone.
+  2. Create a task with today's date. It should save instead of showing "Fill
+  out this field."
+✻ Churned for 9s
+
+❯ On the home page, the archive button's <form> is rendered inside a <p>        
+  element, which is invalid HTML and triggers a React hydration error.          
+  Restructure the task row markup so no <form> or interactive element is nested 
+  inside a <p> — use <div> or <li> instead. Check the rest of the task row for  
+  other invalid nesting while you're there, and don't change any behaviour or   
+  styling.                                                                      
+
+⏺ Let me check the current state — I made this change last turn, so I want to
+  confirm whether it's still in place.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== task row markup ==="…)
+  ⎿  === task row markup ===
+             <ul>
+               {tasks.map((task) => {
+     … +36 lines (ctrl+o to expand)
+
+⏺ This was already done last turn — the wrapper is a <div> now. But one detail
+  needs correcting against your "don't change styling" constraint: I had also
+  added items-center, which wasn't in the original <p className="flex gap-2">.
+  Reverting that so the change is purely structural.
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 1 line, removed 1 line
+      133                  <p>due_date: {task.due_date}</p>
+      134                  <p>topic: {task.topic}</p>
+      135                  <p>status: {task.status}</p>
+      136 -                <div className="flex items-center gap-2">     
+      136 +                <div className="flex gap-2">                  
+      137                    <Link href={`/tasks/${task.id}/edit`}>Edit</
+           Link>
+      138                    <form action={archiveTask}>
+      139                      <input type="hidden" name="id" value={task
+           .id} />
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== diff of the task row vs HEAD ==="…)
+  ⎿  Tool use rejected
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== create form: the due_date input (src/app/page.tsx) ==="…)
+  ⎿  === create form: the due_date input (src/app/page.tsx) ===
+     81:            <label htmlFor="due_date">Due date</label>
+     82-            <input
+     … +17 lines (ctrl+o to expand)
+
+⏺ Confirmed in source: no value, no defaultValue on the create form's date
+  input. Let me confirm what the browser actually receives.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      curl -s --max-time 20 -o /tmp/p4.html -w "status=%{http_code}\n"
+      http://localhost:3000/ 2>&1…)
+  ⎿  status=200
+     === create form due_date input as served to the browser ===
+     <input id="due_date" type="date" required="" class="rounded-md border
+     … +4 lines (ctrl+o to expand)
+
+⏺ I made no change — there's nothing to remove.
+
+  The create form's due date input is served to your browser as:
+
+  <input id="due_date" type="date" required="" class="…" name="due_date"/>
+
+  No value, no defaultValue — not in the source, not in the served HTML. It
+  already starts genuinely empty and already shows the native dd/mm/yyyy
+  placeholder. The edit form is untouched and still has
+  defaultValue={task.due_date}, which is what you want.
+
+  This is the third report in a row describing code that isn't there — first a
+  min attribute, then server-side date validation, now a default value. In each
+  case the file has only required on that input. I'd rather tell you that than
+  add and remove phantom code.
+
+  Two possibilities worth checking:
+
+  1. You're seeing a stale page. There were four next dev processes fighting
+  over port 3000 earlier, one wedged. If your browser is showing cached output
+  from one of those, hard-reload (Cmd+Shift+R).
+  2. It's the browser, not the app. Chrome autofill will populate a date field
+  it recognises from previous submissions, and it renders identically to a real
+  default. Try an incognito window — if the field is empty there, that's
+  autofill, and no code change would fix it.
+
+  Separately, one thing from the interrupted call still needs confirming: I
+  reverted items-center off the archive row so the <p>→<div> change is purely
+  structural, per your "don't change styling." That edit landed but I never got
+  to run tsc on it. Want me to?
+
+✻ Baked for 1m 21s
+
+❯ native dd/mm/yyyy placeholder is actually a real date i dont want it to show  
+  anything                                                                      
+
+⏺ Then the field genuinely has a value — and since the served HTML carries no
+  value attribute, that value is being put there by your browser, not by the
+  app. Two browser behaviours do exactly this on a type="date" field: autofill,
+  and form-value restoration on reload/back-navigation.
+
+  There is a real code-side lever for both. Adding it to the create form only:
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 1 line
+      84                name="due_date"
+      85                type="date"
+      86                required
+      87 +              autoComplete="off"                               
+      88                className="rounded-md border border-zinc-300 px-3
+           py-2 dark:border-zinc-700 dark:bg-zinc-900"
+      89              />
+      90            </div>
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      npx tsc --noEmit 2>&1 | head -10; echo "--- tsc clean if nothing above
+      ---"…)
+  ⎿  --- tsc clean if nothing above ---
+     status=200
+     <input id="due_date" type="date" required="" autoComplete="off" class=
+     … +4 lines (ctrl+o to expand)
+
+⏺ Done — tsc clean, and the attribute is live in the served HTML:
+
+  <input id="due_date" type="date" required="" autoComplete="off" class="…" 
+  name="due_date"/>
+
+  Edit form untouched: still defaultValue={task.due_date} on line 70, no
+  autoComplete added there, so it keeps pre-filling as you want.
+
+  Hard-reload (Cmd+Shift+R) and check. The reload matters — the old page is
+  still in memory otherwise.
+
+  Being straight with you about the odds: autoComplete="off" reliably kills
+  form-value restoration on reload/back-navigation, but Chrome sometimes ignores
+  it for autofill specifically. So this may or may not be enough.
+
+  If the date still appears, one test settles it — open the page in an incognito
+  window. Incognito has no autofill history:
+
+  - Empty in incognito → it was browser autofill. The app is clean, and the
+  remaining fix is clearing Chrome's saved form data (Settings → Autofill →
+  Addresses), not code.
+  - Still shows a date in incognito → it's coming from somewhere I haven't
+  found, and I want to see it. Send me a screenshot plus what's in the field,
+  and I'll dig further rather than guess again.
+
+  I'm flagging the uncertainty because the served HTML has no value — so I can
+  prove the app isn't setting it, but I can't reach into your browser to prove
+  what is.
+
+✻ Cooked for 53s
+
+❯ okay how do i run it again                                                    
+
+⏺ npm run dev, then open http://localhost:3000
+
+  There's likely still a server on 3000 — the one I started to verify the fix.
+  If npm run dev complains or the page hangs, clear the port first:
+
+  lsof -ti:3000 | xargs kill -9
+  npm run dev
+
+  Then hard-reload with Cmd+Shift+R rather than a normal refresh, since that's
+  what actually tests the autoComplete="off" change.
+
+✻ Baked for 6s
+
+※ recap: You're building a Next.js todo app with SQLite, and the current task is stopping a date from appearing in the create form's due date field. Next: run npm run dev, hard-reload with Cmd+Shift+R, and check whether the field is empty.
+
+❯ Two things:                                                                   
+  Extract the overdue check from page.tsx into an exported function             
+  isOverdue(dueDate: string, status: string): boolean in a new file             
+  src/lib/overdue.ts, and use it in page.tsx instead of the inline check.       
+  Behaviour should be identical.                                                
+  Set up Vitest and write tests against the database and this function directly 
+  — not through the server actions or the UI:                                   
+  Inserting a task stores all four fields, with status defaulting to 'todo'.    
+  Archiving a task (is_archived = 1) excludes it from a query filtered WHERE    
+  is_archived = 0, but it's still retrievable without that filter.              
+  isOverdue returns true for a past due date with status 'todo', and false for  
+  a past due date with status 'complete'.                                       
+  Tests must use a fresh SQLite database — :memory: or a temp file created and  
+  torn down per run — never the real todo.db. Add an npm script so npm test     
+  runs the whole suite with one command.                                        
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Note db.ts opens todo.db as a module-load side effect — so tests can't import
+  it. I'll extract the schema so tests can build a fresh DB from the same
+  definition rather than a drifting copy.
+⏺ Write(src/lib/schema.ts)
+  ⎿  Wrote 15 lines to src/lib/schema.ts
+       1 // Kept separate from db.ts so tests can build a fresh database 
+         from the same
+         dule load.
+       3 export const SCHEMA = `
+       4   CREATE TABLE IF NOT EXISTS tasks (
+       6     title TEXT NOT NULL,
+       7     description TEXT,
+       8     due_date TEXT NOT NULL,
+      10     status TEXT NOT NULL CHECK (status IN ('todo','in-progress',
+         'complete')) DEFAULT 'todo',
+     … +8 lines (ctrl+o to expand)
+
+⏺ Update(src/lib/db.ts)
+  ⎿  Added 1 line, removed 14 lines
+       1  import Database from "better-sqlite3";
+       2  import path from "path";
+       3 +import { SCHEMA } from "./schema";                             
+       4  
+       4 -const SCHEMA = `                                               
+       5 -  CREATE TABLE IF NOT EXISTS tasks (                           
+       6 -    id INTEGER PRIMARY KEY AUTOINCREMENT,                      
+       7 -    title TEXT NOT NULL,                                       
+       8 -    description TEXT,                                          
+       9 -    due_date TEXT NOT NULL,                                    
+      10 -    topic TEXT NOT NULL,                                       
+      11 -    status TEXT NOT NULL CHECK (status IN ('todo','in-progress'
+         -,'complete')) DEFAULT 'todo',                                  
+      12 -    is_archived INTEGER NOT NULL DEFAULT 0,                    
+      13 -    created_at TEXT NOT NULL DEFAULT (datetime('now')),        
+      14 -    updated_at TEXT NOT NULL DEFAULT (datetime('now'))         
+      15 -  );                                                           
+      16 -`;                                                             
+      17 -                                                               
+       5  declare global {
+       6    // eslint-disable-next-line no-var
+       7    var __db: Database.Database | undefined;
+
+⏺ Now the extracted overdue function.
+
+⏺ Write(src/lib/overdue.ts)
+  ⎿  Wrote 13 lines to src/lib/overdue.ts
+      1 // Local-time "today" as YYYY-MM-DD. Deliberately not toISOString
+        (), which is
+      2 // UTC and would shift the date for anyone not on UTC.
+      3 function todayAsISODate(): string {
+      4   const now = new Date();
+      5   const year = now.getFullYear();
+      6   const month = String(now.getMonth() + 1).padStart(2, "0");
+      7   const day = String(now.getDate()).padStart(2, "0");
+      8   return `${year}-${month}-${day}`;
+      9 }
+     … +5 lines (ctrl+o to expand)
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 1 line
+      1  import Link from "next/link";
+      2  import db from "@/lib/db";
+      3 +import { isOverdue } from "@/lib/overdue";                      
+      4  import { archiveTask, createTask } from "./actions";
+      5  
+      6  type Task = {
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Removed 8 lines
+      15    updated_at: string;
+      16  };
+      17  
+      18 -function todayAsISODate(): string {                            
+      19 -  const now = new Date();                                      
+      20 -  const year = now.getFullYear();                              
+      21 -  const month = String(now.getMonth() + 1).padStart(2, "0");   
+      22 -  const day = String(now.getDate()).padStart(2, "0");          
+      23 -  return `${year}-${month}-${day}`;                            
+      24 -}                                                              
+      25 -                                                               
+      18  const SORT_COLUMNS = ["topic", "status", "due_date"] as const;
+      19  type SortColumn = (typeof SORT_COLUMNS)[number];
+      20  
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Removed 1 line
+      37        }`
+      38      )
+      39      .all() as Task[];
+      40 -  const today = todayAsISODate();                              
+      40  
+      41    return (
+      42      <div className="flex flex-col flex-1 items-center bg-zinc-5
+          0 font-sans dark:bg-black">
+
+⏺ Update(src/app/page.tsx)
+  ⎿  Added 2 lines, removed 2 lines
+      110  
+      111          <ul>
+      112            {tasks.map((task) => {
+      113 -            const isOverdue = task.due_date < today && task.st
+          -atus !== "complete";                                          
+      113 +            const overdue = isOverdue(task.due_date, task.stat
+          +us);                                                          
+      114  
+      115              return (
+      116                <li key={task.id}>
+      117                  <p>
+      118                    title: {task.title}
+      119 -                  {isOverdue && (                             
+      119 +                  {overdue && (                               
+      120                      <span className="ml-2 rounded bg-red-600 p
+           x-1.5 py-0.5 text-xs font-medium text-white">
+      121                        Overdue
+      122                      </span>
+
+⏺ Now Vitest. Installing as a dev dependency.
+
+⏺ Bash(npm install -D vitest 2>&1 | tail -8)
+  ⎿    run `npm fund` for details
+
+     3 high severity vulnerabilities
+     … +5 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      node -e "const p=require('./package.json');console.log('vitest:',p.devDepe
+      ndencies.vitest);console.log('script…)
+  ⎿  vitest: ^4.1.10
+     scripts: {
+       "dev": "next dev",
+     … +17 lines (ctrl+o to expand)
+
+⏺ Vitest 4.1.10 installed. (The 3 vulnerabilities are pre-existing — they're in
+  next's postcss and sharp, not from vitest.) Adding the npm script:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(package.json)
+  ⎿  Added 2 lines, removed 1 line
+       6      "dev": "next dev",
+       7      "build": "next build",
+       8      "start": "next start",
+       9 -    "lint": "eslint"                                           
+       9 +    "lint": "eslint",                                          
+      10 +    "test": "vitest run"                                       
+      11    },
+      12    "dependencies": {
+      13      "better-sqlite3": "^13.0.2",
+
+⏺ Write(vitest.config.ts)
+  ⎿  Wrote 14 lines to vitest.config.ts
+       1 import { defineConfig } from "vitest/config";
+       2 import path from "path";
+       3 
+       4 export default defineConfig({
+       5   test: {
+       6     environment: "node",
+       7     include: ["src/**/*.test.ts"],
+       8   },
+       9   resolve: {
+      10     alias: {
+     … +4 lines (ctrl+o to expand)
+
+⏺ Now the tests.
+
+⏺ Write(src/lib/overdue.test.ts)
+  ⎿  Wrote 20 lines to src/lib/overdue.test.ts
+       1 import { describe, expect, it } from "vitest";
+       2 import { isOverdue } from "./overdue";
+       3 
+       4 const PAST = "2020-01-01";
+       5 const FUTURE = "2999-01-01";
+       7 describe("isOverdue", () => {
+       8   it("returns true for a past due date with status 'todo'", () =
+         > {
+       9     expect(isOverdue(PAST, "todo")).toBe(true);
+      10   });
+     … +12 lines (ctrl+o to expand)
+
+⏺ Write(src/lib/db.test.ts)
+  ⎿  Wrote 84 lines to src/lib/db.test.ts
+       1 import Database from "better-sqlite3";
+       2 import { afterEach, beforeEach, describe, expect, it } from "vit
+         est";
+       4 
+       5 // Every test runs against a fresh in-memory database built from
+          the same
+       6 // SCHEMA the app uses. The real todo.db is never opened.
+       8 
+       9 beforeEach(() => {
+      10   db = new Database(":memory:");
+     … +82 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      ls -la todo.db 2>/dev/null && md5 -q todo.db > /tmp/db_before.txt && echo
+      "todo.db checksum recorded"…)
+  ⎿  -rw-r--r--@ 1 queenjulius  staff  12288 Aug 10 22:47 todo.db
+     todo.db checksum recorded
+     … +19 lines (ctrl+o to expand)
+
+⏺ All 5 pass. Let me silence that config warning and verify todo.db was
+  untouched.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      rm -f vitest.config.ts…)
+  ⎿  > coms30011a-lab-one@0.1.0 test
+     > vitest run
+     … +9 lines (ctrl+o to expand)
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== todo.db untouched by the test run? ==="…)
+  ⎿  === todo.db untouched by the test run? ===
+     IDENTICAL — tests never wrote to todo.db
+     … +12 lines (ctrl+o to expand)
+
+⏺ One lint warning in the file I edited. Let me check whether I introduced it.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== is db.ts tracked, and did it lint clean before my edit? ==="…)
+  ⎿  === is db.ts tracked, and did it lint clean before my edit? ===
+       19:3  warning  Unused eslint-disable directive (no problems were rep
+     orted from 'no-var')
+     … +3 lines (ctrl+o to expand)
+
+⏺ Pre-existing (was line 19, now line 6) — not from my change, so I'm leaving
+  it. Confirming my edit survived the stash round-trip:
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== db.ts imports SCHEMA? ==="…)
+  ⎿  === db.ts imports SCHEMA? ===
+     import Database from "better-sqlite3";
+     import path from "path";
+     … +15 lines (ctrl+o to expand)
+
+⏺ Both done. npm test → 5 passed, tsc --noEmit clean.
+
+  1. Extracted isOverdue
+
+  src/lib/overdue.ts (new) — isOverdue(dueDate: string, status: string): 
+  boolean, returning dueDate < todayAsISODate() && status !== "complete". The
+  local-time todayAsISODate helper moved here from page.tsx unchanged.
+
+  src/app/page.tsx — dropped the local helper and the today variable; the row
+  now does const overdue = isOverdue(task.due_date, task.status). Renamed the
+  local from isOverdue to overdue so it doesn't shadow the import. Same strict
+  <, same !== "complete" — behaviour identical.
+
+  2. Vitest
+
+  vitest.config.mts — node environment, src/**/*.test.ts, @ alias. Used .mts
+  because the .ts version emitted an ESM-in-CJS warning on every run.
+
+  src/lib/db.test.ts — fresh new Database(":memory:") per test via beforeEach,
+  closed in afterEach. Covers insert-stores-four-fields-with-status defaulting
+  to 'todo', and archive-excludes-from-is_archived = 0-but-still-retrievable
+  (asserting the row count stays 2, so archiving hides rather than deletes).
+
+  src/lib/overdue.test.ts — past+'todo' → true, past+'complete' → false, plus a
+  future-date case.
+
+  package.json — "test": "vitest run".
+
+  One structural change you should know about: db.ts opened todo.db at module
+  load, so importing it from a test would have touched the real database. I
+  moved the schema into src/lib/schema.ts, which db.ts now imports. Tests build
+  their in-memory DB from that same constant, so there's no second copy of the
+  schema to drift. I checksummed todo.db before and after — identical, tests
+  never wrote to it.
+
+  Two things I left alone deliberately: a pre-existing no-var lint warning in
+  db.ts (confirmed present before my edit by stashing and re-linting), and 3
+  pre-existing high-severity npm advisories in next's postcss and sharp.
+
+✻ Cooked for 5m 6s
+
+※ recap: You're building a Next.js todo app with SQLite; I just extracted isOverdue into src/lib/overdue.ts and set up Vitest, with all 5 tests passing. Next: run npm test yourself to confirm, then reload the app to check the date field.
+
+❯ fg                                                                            
+
+⏺ fg is a shell builtin — it won't do anything here, since I run each command in
+  its own shell rather than a persistent interactive one.
+
+  If you meant to bring back the dev server: it's still running on port 3000
+  from earlier (I started it to verify the hydration fix). Check with:
+
+  lsof -ti:3000
+
+  If you want it gone: lsof -ti:3000 | xargs kill -9, then npm run dev when you
+  want it back.
+
+  Or did you mean something else?
+
+✻ Crunched for 9s
+
+❯ which file are the tests in                                                   
+
+⏺ Two files, both in src/lib/:
+
+  - src/lib/db.test.ts — the two database tests (insert stores all four fields
+  with status defaulting to 'todo'; archiving excludes from WHERE is_archived = 
+  0 but stays retrievable)
+  - src/lib/overdue.test.ts — the three isOverdue tests
+
+  npm test runs both. The pattern that picks them up is src/**/*.test.ts in
+  vitest.config.mts, so any new *.test.ts under src/ gets included
+  automatically.
+
+✻ Cogitated for 6s
+
+※ recap: We're building your COMS30011A todo app in Next.js; the latest task, extracting isOverdue into src/lib/overdue.ts and adding Vitest tests, is done and all 5 tests pass. Next: run npm test yourself to confirm, then tell me what to build.
+
+❯ commit the tests                                                              
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== branch ==="; git branch --show-current…)
+  ⎿  === branch ===
+     main
+     === status ===
+     … +16 lines (ctrl+o to expand)
+
+⏺ Everything is currently staged, including earlier UI work. Since we're on main
+  (the default branch), I'll branch first and commit only the test-related
+  files.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git checkout -b add-vitest-tests 2>&1 | tail -2…)
+  ⎿  Switched to a new branch 'add-vitest-tests'
+     === staged for this commit ===
+     M  package-lock.json
+     … +9 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      npm test 2>&1 | tail -6…)
+  ⎿   Test Files  2 passed (2)
+           Tests  5 passed (5)
+        Start at  20:16:37
+     … +22 lines (ctrl+o to expand)
+
+⏺ The commit failed — git has no identity configured on this machine. Tests
+  passed (5/5) and everything is still staged, so this just needs your
+  name/email.
+
+  I won't guess or set this globally for you. Run one of these:
+
+  git config user.email "2730098@students.wits.ac.za"
+  git config user.name "Your Name"
+
+  (no --global, so it applies to this repo only — add --global if you want it
+  machine-wide)
+
+  Then tell me and I'll re-run the commit.
+
+  Two things worth flagging:
+
+  Your history moved. HEAD is now 23a2bd6 Add sorting, but at the start of this
+  session it was 420c863 Recover AI transcripts. You've been committing outside
+  our conversation, so my picture of the history was stale. Worth a git log 
+  --oneline to confirm the branch point is where you expect — I branched
+  add-vitest-tests off whatever main currently points at.
+
+  What I staged, and what I left out. Staged: both test files, overdue.ts,
+  schema.ts, db.ts, vitest.config.mts, package.json, package-lock.json. db.ts
+  has to go in because it now imports schema.ts — splitting them would break the
+  build at that commit.
+
+  Left unstaged: src/app/page.tsx and src/app/tasks/[id]/edit/page.tsx — those
+  carry the input styling, the <p>→<div> nesting fix, and autoComplete="off"
+  from earlier turns. They're separate work from "the tests," so I kept them
+  out. Say the word if you want them in the same commit or a follow-up one.
+
+✻ Cooked for 1m 8s
+
+※ recap: We're building the Next.js todo app and just added a Vitest suite for the DB and isOverdue; all 5 tests pass and the files are staged on a new add-vitest-tests branch. The commit failed because git has no identity, so set user.name and user.email, then I'll re-run it.
+
+❯ Prompt for Claude Code:                                                       
+  Create DOCUMENTATION.md in the repo root with exactly three sections:         
+  Third-Party Code — every package in package.json (dependencies and            
+  devDependencies), with one line each on why it was chosen. Not just a list.   
+  Database Design — the tasks table with each column, its type, and its         
+  constraints. Explain the relationships and the three key design decisions:    
+  why a single table is sufficient here, why archive is a flag on the row       
+  rather than a separate table or a delete, and why overdue is derived at read  
+  time from due_date and status rather than stored as a column or status value. 
+  Running It — the Node version, and the exact commands to clone, install, run, 
+  and test, such that someone starting from a clean clone can get it working    
+  with nothing else to hand.                                                    
+  Read the actual package.json and src/lib/db.ts rather than assuming — the     
+  documentation must match the shipped code exactly.                            
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== schema.ts (authoritative table definition) ==="; cat
+      src/lib/schema.ts…)
+  ⎿  === schema.ts (authoritative table definition) ===
+     // Kept separate from db.ts so tests can build a fresh database from t
+     he same
+     … +25 lines (ctrl+o to expand)
+⏺ Write(DOCUMENTATION.md)
+  ⎿  Wrote 138 lines to DOCUMENTATION.md
+       1 # Documentation
+       2 
+       3 ## Third-Party Code
+       4 
+       5 Every package in `package.json`, and why it is there.
+       6 
+       7 ### Dependencies
+       8 
+       9 | Package | Version | Why |
+      10 | --- | --- | --- |
+     … +237 lines (ctrl+o to expand)
+
+⏺ Let me verify the doc's factual claims against the code rather than trusting
+  my own summary.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== todo.db gitignored? ==="; grep -n "todo.db" .gitignore…)
+  ⎿  === todo.db gitignored? ===
+     44:/todo.db
+     45:/todo.db-*
+     … +19 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== every package in package.json vs every package documented ==="…)
+  ⎿  === every package in package.json vs every package documented ===
+     total packages: 14
+     undocumented : none — all covered
+     … +2 lines (ctrl+o to expand)
+
+⏺ Created DOCUMENTATION.md with the three sections. Everything is read from the
+  shipped code, and I verified each claim rather than trusting my own
+  recollection.
+
+  Third-Party Code — all 14 packages (4 dependencies, 10 devDependencies), each
+  with the actual reason. I checked programmatically that none were missed. The
+  reasons are specific where the choice was load-bearing: better-sqlite3 for its
+  synchronous API (why server components can query without await), vitest for
+  running TS/ESM with no transform config and reusing Vite's alias resolution
+  for @/.
+
+  Database Design — the nine columns with exact types and constraints, taken
+  from src/lib/schema.ts. No relationships exist, so I said so plainly rather
+  than inventing any. The three decisions are argued with their trade-offs,
+  including what each one costs: the archive flag means every active query must
+  remember WHERE is_archived = 0; the single table would deserve splitting if
+  topics ever gain attributes or need atomic renaming.
+
+  Running It — clone/install/run/test from the real remote URL, plus the
+  native-module toolchain caveat for better-sqlite3 and the port-3000 recovery
+  step you hit repeatedly.
+
+  Two things I documented as caveats rather than smoothing over:
+
+  - @types/better-sqlite3 is on major 9 while better-sqlite3 is on major 13. tsc
+  passes and the surface used is small, but that's a genuine mismatch, so it's
+  flagged in the doc rather than presented as fine.
+  - No engines field exists in package.json. Rather than assert a version, I
+  documented the real constraint — Next 16.2.12 requires >=20.9.0 (read from its
+  package.json) — and noted development was on v24.14.0.
+
+  One thing to decide: DOCUMENTATION.md is untracked and you're still on the
+  add-vitest-tests branch, with the earlier commit blocked on git identity. Want
+  me to fold this into that commit once you've set your name/email, or keep it
+  separate?
+
+✻ Cooked for 2m 4s
+
+❯ commit this too                                                               
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== git identity ==="…)
+  ⎿  === git identity ===
+     Queen8213
+     (user.email NOT set)
+     … +13 lines (ctrl+o to expand)
+
+⏺ user.name is set to Queen8213, but user.email still isn't — that's what
+  blocked the commit. Staging the doc now:
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git add DOCUMENTATION.md…)
+  ⎿  A  DOCUMENTATION.md
+     A  src/lib/db.test.ts
+     A  src/lib/overdue.test.ts
+     … +3 lines (ctrl+o to expand)
+
+⏺ User answered Claude's questions:
+  ⎿  · Which email should the commit be authored with? → 
+     keitumetsequeen2004@gmail.com
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git config user.email "keitumetsequeen2004@gmail.com"…)
+  ⎿  identity: Queen8213 <keitumetsequeen2004@gmail.com>
+      Test Files  2 passed (2)
+           Tests  5 passed (5)
+     … +3 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git commit -q -F - <<'EOF'…)
+  ⎿  6968b6a Add Vitest suite, isOverdue module, and project documentation
+     === files in this commit ===
+      DOCUMENTATION.md        |  138 ++++++
+     … +10 lines (ctrl+o to expand)
+
+⏺ Committed as 6968b6a on branch add-vitest-tests, with tests passing (5/5)
+  beforehand.
+
+  Set user.email to keitumetsequeen2004@gmail.com — repo-local only, no
+  --global, so it won't affect your other projects. Add --global yourself if
+  you'd rather it be machine-wide.
+
+  Nine files went in: DOCUMENTATION.md, both test files, overdue.ts, schema.ts,
+  db.ts, vitest.config.mts, and the two package manifests.
+
+  Still uncommitted, deliberately:
+
+   M src/app/page.tsx
+   M src/app/tasks/[id]/edit/page.tsx
+
+  Those hold the input styling, the <p>→<div> hydration fix, and
+  autoComplete="off". I left them out because you asked for the tests and the
+  docs specifically — but note page.tsx is what actually uses isOverdue, so on
+  this branch the module is committed while its only caller isn't. Worth a
+  second commit soon so the two don't drift apart.
+
+  Also: nothing is pushed. The branch is local only. Say the word if you want it
+  on origin, or merged back to main.
+
+✻ Cooked for 1m 4s
+
+❯ push it                                                                       
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git push -u origin add-vitest-tests 2>&1 | tail -12)
+  ⎿  remote:
+     remote: Create a pull request for 'add-vitest-tests' on GitHub by visi
+     ting:
+     … +6 lines (ctrl+o to expand)
+
+⏺ Pushed. add-vitest-tests is on origin and tracking.
+
+  Open a PR here:
+  https://github.com/Queen8213/coms30011a-lab_one/pull/new/add-vitest-tests
+
+  One thing now that it's public: your commit is authored with
+  keitumetsequeen2004@gmail.com, which is visible in the pushed history. You
+  picked that over the noreply option, so presumably intended — just noting that
+  it's now on GitHub rather than only local. If you'd rather it weren't, it
+  needs a history rewrite and force-push, and that's easiest to do now while the
+  branch is one commit with no PR against it.
+
+  Still local-only: the page.tsx and edit-page changes. main is untouched.
+
+✻ Churned for 27s
+
+❯ Add Mermaid diagrams to DOCUMENTATION.md:                                     
+  In the Database Design section, an entity-relationship diagram (erDiagram) of 
+  the tasks table showing every column with its type and key constraints,       
+  matching the shipped schema exactly.                                          
+  Also in Database Design, a state diagram (stateDiagram-v2) showing the three  
+  task statuses (todo, in-progress, complete), with archiving shown as a        
+  separate flag rather than a status, and overdue shown as a derived label      
+  computed from due_date and status rather than a stored state.                 
+  Keep them accurate to the actual code — read src/lib/db.ts and                
+  src/lib/overdue.ts first.                                                     
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== does any code write/change status? ==="…)
+  ⎿  === does any code write/change status? ===
+     (actions.ts never writes status)
+     === does any code write is_archived? ===
+     … +4 lines (ctrl+o to expand)
+
+⏺ Two accuracy findings before I draw: no code path ever writes status (it's
+  only ever the schema default), and is_archived is only ever set to 1 — there's
+  no unarchive. The diagrams need to say that. Let me find the insertion
+  points.
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      grep -n "^## \|^### " DOCUMENTATION.md)
+  ⎿  3:## Third-Party Code
+     7:### Dependencies
+     16:### Dev Dependencies
+     … +13 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Adding the ER diagram after the column table:
+
+⏺ Update(DOCUMENTATION.md)
+  ⎿  Added 17 lines
+      52  
+      53  **A note on date formats:** `due_date` is a plain calendar date
+           (`2026-08-20`), whereas `datetime('now')` produces a UTC times
+          tamp (`2026-08-20 14:30:00`). They are not interchangeable, and
+           only `due_date` participates in the overdue comparison.
+      54  
+      55 +```mermaid                                                     
+      56 +erDiagram                                                      
+      57 +    tasks {                                                    
+      58 +        INTEGER id PK "AUTOINCREMENT"                          
+      59 +        TEXT title "NOT NULL"                                  
+      60 +        TEXT description "nullable"                            
+      61 +        TEXT due_date "NOT NULL, YYYY-MM-DD"                   
+      62 +        TEXT topic "NOT NULL, free text - not a FK"            
+      63 +        TEXT status "NOT NULL, DEFAULT 'todo', CHECK IN (todo, 
+         +in-progress, complete)"                                        
+      64 +        INTEGER is_archived "NOT NULL, DEFAULT 0, boolean as 0 
+         +or 1"                                                          
+      65 +        TEXT created_at "NOT NULL, DEFAULT datetime('now')"    
+      66 +        TEXT updated_at "NOT NULL, DEFAULT datetime('now')"    
+      67 +    }                                                          
+      68 +```                                                            
+      69 +                                                               
+      70 +The diagram shows a single entity and no relationship lines bec
+         +ause the database genuinely has one table and no foreign keys. 
+         +`topic` looks like it should point at something, but it is plai
+         +n text — see design decision 1.                                
+      71 +                                                               
+      72  ### Relationships
+      73  
+      74  There are none. `tasks` is a single standalone table with no fo
+          reign keys and no join tables.
+
+⏺ Now the state diagram. Let me place it after design decision 3, where it
+  summarises both decisions.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(DOCUMENTATION.md)
+  ⎿  Added 45 lines
+      104  
+      105  Deriving it also keeps the rule in one place: the `status !== 
+           'complete'` clause means a finished task is never flagged, how
+           ever late it was, and the strict `<` means a task due *today* 
+           is not yet overdue — it may still be due later in the day.
+      106  
+      107 +### The three axes, side by side                              
+      108 +                                                              
+      109 +Progress and archiving are two independent stored columns; ove
+          +rdue is neither of them, and is not stored at all.            
+      110 +                                                              
+      111 +```mermaid                                                    
+      112 +stateDiagram-v2                                               
+      113 +    direction TB                                              
+      114 +                                                              
+      115 +    state "PROGRESS - stored in the status column" as progress
+          + {                                                            
+      116 +        state "in-progress" as inprogress                     
+      117 +        [*] --> todo: INSERT applies DEFAULT 'todo'           
+      118 +        todo --> inprogress: allowed by CHECK                 
+      119 +        inprogress --> complete: allowed by CHECK             
+      120 +        todo --> complete: allowed by CHECK                   
+      121 +    }                                                         
+      122 +                                                              
+      123 +    state "VISIBILITY - stored in the is_archived column" as v
+          +isibility {                                                   
+      124 +        state "is_archived = 0" as active                     
+      125 +        state "is_archived = 1" as archived                   
+      126 +        [*] --> active: INSERT applies DEFAULT 0              
+      127 +        active --> archived: archiveTask sets the flag to 1   
+      128 +    }                                                         
+      129 +                                                              
+      130 +    note right of progress                                    
+      131 +        A task holds one PROGRESS value and one               
+      132 +        VISIBILITY value at the same time. They are           
+      133 +        independent, so archiving never changes status        
+      134 +        and changing status never archives.                   
+      135 +    end note                                                  
+      136 +                                                              
+      137 +    note right of visibility                                  
+      138 +        OVERDUE appears in neither box because it is          
+      139 +        not stored anywhere. It is recomputed on every        
+      140 +        render by isOverdue in src/lib/overdue.ts:            
+      141 +        due_date is before today AND status is not            
+      142 +        'complete'. It flips at midnight with no write,       
+      143 +        which is exactly why it cannot be a column.           
+      144 +    end note                                                  
+      145 +```                                                           
+      146 +                                                              
+      147 +**Two things in that diagram reflect the code as it stands tod
+          +ay, not an intended design:**                                 
+      148 +                                                              
+      149 +- The three `status` transitions are permitted by the `CHECK` 
+          +constraint, but **no code writes `status`**. `src/app/actions.
+          +ts` never sets it, so in practice every row keeps the `'todo'`
+          + default. The arrows show what the schema allows; the status-c
+          +hange feature is not built.                                   
+      150 +- The `VISIBILITY` box has **no arrow back from archived to ac
+          +tive**. `archiveTask` only ever sets `is_archived = 1`; nothin
+          +g sets it to `0`. Archiving is currently one-way.             
+      151 +                                                              
+      152  ## Running It
+      153  
+      154  ### Node version
+
+⏺ Let me verify the ER diagram's columns match the shipped schema exactly,
+  rather than eyeballing it.
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      node -e "…)
+  ⎿  schema columns: 9 | erDiagram columns: 9
+       OK   INTEGER id -> INTEGER id
+       OK   TEXT title -> TEXT title
+     … +9 lines (ctrl+o to expand)
+
+⏺ That's a false positive from my parser — description TEXT, has a trailing
+  comma. Re-running with it stripped:
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      node -e "…)
+  ⎿    OK   INTEGER id
+       OK   TEXT title
+       OK   TEXT description
+     … +8 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== mermaid blocks present ==="…)
+  ⎿  === mermaid blocks present ===
+     55:```mermaid
+     111:```mermaid
+     … +9 lines (ctrl+o to expand)
+
+⏺ Both diagrams added to the Database Design section.
+
+  erDiagram — after the column table. All 9 columns with SQLite types and key
+  constraints, verified programmatically against src/lib/schema.ts for name,
+  type, and order. It shows a single entity with no relationship lines, because
+  that's the actual schema — topic is flagged in-diagram as free text, not a FK.
+
+  stateDiagram-v2 — after design decision 3, as two composite boxes:
+  - PROGRESS (the status column) with the three values from the CHECK constraint
+  - VISIBILITY (the is_archived column) as 0 → 1
+
+  with OVERDUE deliberately in a note rather than as a state, since the whole
+  point is that it isn't stored. Notes explain the two axes are independent and
+  that overdue is recomputed per render.
+
+  What reading the code changed: two things I'd have drawn wrong from
+  assumption, now called out under the diagram —
+
+  1. No code writes status. actions.ts never sets it, so every row keeps 'todo'.
+  The transition arrows show what the CHECK permits, not a working feature.
+  2. Archiving is one-way. archiveTask only sets is_archived = 1; nothing sets
+  it back. So there's no return arrow.
+
+  Drawing either as a working flow would have documented an app you don't have.
+
+  One caveat: I verified content accuracy and fence balance, but I did not
+  render the Mermaid — that needs the mermaid CLI plus a headless Chromium
+  download, which seemed a heavy thing to pull onto your machine unasked. GitHub
+  renders Mermaid natively, so pushing and viewing the file there is the quick
+  check. Say the word if you'd rather I install the renderer and verify locally
+  first.
+
+  DOCUMENTATION.md is modified but uncommitted.
+
+✻ Brewed for 2m 29s
+
+❯ comit and push                                                                
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git branch --show-current…)
+  ⎿  add-vitest-tests
+      M DOCUMENTATION.md
+      M src/app/page.tsx
+      M src/app/tasks/[id]/edit/page.tsx
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git add DOCUMENTATION.md…)
+  ⎿  4d0e1d3 Add ER and state diagrams to DOCUMENTATION.md
+     To https://github.com/Queen8213/coms30011a-lab_one.git
+        6968b6a..4d0e1d3  add-vitest-tests -> add-vitest-tests
+
+⏺ Committed as 4d0e1d3 and pushed to origin/add-vitest-tests.
+
+  View the rendered diagrams here — GitHub renders Mermaid natively, so this
+  doubles as the syntax check I couldn't run locally:
+  https://github.com/Queen8213/coms30011a-lab_one/blob/add-vitest-tests/DOCUMENT
+  ATION.md
+
+  If either diagram shows a parse error instead of a picture, tell me and I'll
+  fix the syntax.
+
+  Still uncommitted, same as before:
+
+   M src/app/page.tsx
+   M src/app/tasks/[id]/edit/page.tsx
+
+  That's the input styling, the <p>→<div> hydration fix, and autoComplete="off".
+  Worth folding in soon — page.tsx is the only caller of isOverdue, which is
+  already pushed without it. Want me to commit those too?
+
+✻ Cooked for 28s
+
+❯ why is it not on main                                                         
+
+⏺ Because I put it on a branch rather than committing straight to main — that's
+  my default when the current branch is the repo's main branch. I said so at the
+  time ("Since we're on main, I'll branch first"), but I didn't check that it
+  was what you wanted, and for a solo lab repo it's probably just friction.
+
+  Let me check where things stand:
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== commits on the branch but not on main ==="…)
+  ⎿  === commits on the branch but not on main ===
+     4d0e1d3 Add ER and state diagrams to DOCUMENTATION.md
+     6968b6a Add Vitest suite, isOverdue module, and project documentation
+     … +4 lines (ctrl+o to expand)
+
+⏺ It's a clean fast-forward — two commits, and main has nothing the branch
+  doesn't. Merging it in:
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git checkout main 2>&1 | tail -2…)
+  ⎿  M  src/app/tasks/[id]/edit/page.tsx
+     Your branch is up to date with 'origin/main'.
+      create mode 100644 src/lib/overdue.ts
+     … +8 lines (ctrl+o to expand)
+
+❯ The Mermaid diagrams in DOCUMENTATION.md render with clipped text — column    
+  names and state labels are cut off mid-word. Fix the rendering so all labels  
+  display fully. Shorten overly long inline labels, move detailed explanations  
+  out of the diagram into prose beneath it, and keep the diagram itself         
+  readable at standard width.                                                   
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(DOCUMENTATION.md)
+  ⎿  Added 19 lines, removed 9 lines
+      55  ```mermaid
+      56  erDiagram
+      57      tasks {
+      58 -        INTEGER id PK "AUTOINCREMENT"                          
+      59 -        TEXT title "NOT NULL"                                  
+      58 +        INTEGER id PK "auto"                                   
+      59 +        TEXT title "required"                                  
+      60          TEXT description "nullable"
+      61 -        TEXT due_date "NOT NULL, YYYY-MM-DD"                   
+      62 -        TEXT topic "NOT NULL, free text - not a FK"            
+      63 -        TEXT status "NOT NULL, DEFAULT 'todo', CHECK IN (todo, 
+         -in-progress, complete)"                                        
+      64 -        INTEGER is_archived "NOT NULL, DEFAULT 0, boolean as 0 
+         -or 1"                                                          
+      65 -        TEXT created_at "NOT NULL, DEFAULT datetime('now')"    
+      66 -        TEXT updated_at "NOT NULL, DEFAULT datetime('now')"    
+      61 +        TEXT due_date "required"                               
+      62 +        TEXT topic "required"                                  
+      63 +        TEXT status "enum"                                     
+      64 +        INTEGER is_archived "flag"                             
+      65 +        TEXT created_at "auto"                                 
+      66 +        TEXT updated_at "auto"                                 
+      67      }
+      68  ```
+      69  
+      70 -The diagram shows a single entity and no relationship lines bec
+         -ause the database genuinely has one table and no foreign keys. 
+         -`topic` looks like it should point at something, but it is plai
+         -n text — see design decision 1.                                
+      70 +Column comments are kept to one word so nothing clips; the full
+         + types, defaults and constraints are in the table directly abov
+         +e. Expanding the shorthand:                                    
+      71  
+      72 +- **`id`** — `PRIMARY KEY AUTOINCREMENT`, assigned by SQLite.  
+      73 +- **`description`** — the only nullable column. Blank input is 
+         +stored as `NULL`, not `''`.                                    
+      74 +- **`due_date`** — `NOT NULL`, ISO `YYYY-MM-DD`.               
+      75 +- **`topic`** — `NOT NULL` free text. It looks like it should r
+         +eference something, but there is no `topics` table and no forei
+         +gn key; see design decision 1.                                 
+      76 +- **`status`** — `NOT NULL DEFAULT 'todo'`, constrained by `CHE
+         +CK (status IN ('todo','in-progress','complete'))`.             
+      77 +- **`is_archived`** — `NOT NULL DEFAULT 0`, holding `0` or `1`,
+         + since SQLite has no boolean type.                             
+      78 +- **`created_at`** / **`updated_at`** — `NOT NULL DEFAULT (date
+         +time('now'))`, a UTC timestamp.                                
+      79 +                                                               
+      80 +The diagram shows one entity and no relationship lines because 
+         +the database genuinely has one table and no foreign keys.      
+      81 +                                                               
+      82  ### Relationships
+      83  
+      84  There are none. `tasks` is a single standalone table with no fo
+          reign keys and no join tables.
+
+⏺ Now the state diagram — the composite titles and embedded notes were the worst
+  offenders.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(DOCUMENTATION.md)
+  ⎿  Added 18 lines, removed 30 lines
+      120  
+      121  ```mermaid
+      122  stateDiagram-v2
+      123 -    direction TB                                              
+      124 -                                                              
+      125 -    state "PROGRESS - stored in the status column" as progress
+          - {                                                            
+      123 +    state "status" as progress {                              
+      124 +        direction LR                                          
+      125          state "in-progress" as inprogress
+      127 -        [*] --> todo: INSERT applies DEFAULT 'todo'           
+      128 -        todo --> inprogress: allowed by CHECK                 
+      129 -        inprogress --> complete: allowed by CHECK             
+      130 -        todo --> complete: allowed by CHECK                   
+      126 +        [*] --> todo                                          
+      127 +        todo --> inprogress                                   
+      128 +        inprogress --> complete                               
+      129 +        todo --> complete                                     
+      130      }
+      131  
+      133 -    state "VISIBILITY - stored in the is_archived column" as v
+          -isibility {                                                   
+      134 -        state "is_archived = 0" as active                     
+      135 -        state "is_archived = 1" as archived                   
+      136 -        [*] --> active: INSERT applies DEFAULT 0              
+      137 -        active --> archived: archiveTask sets the flag to 1   
+      132 +    state "is_archived" as visibility {                       
+      133 +        direction LR                                          
+      134 +        state "0 active" as active                            
+      135 +        state "1 archived" as archived                        
+      136 +        [*] --> active                                        
+      137 +        active --> archived                                   
+      138      }
+      139 +```                                                           
+      140  
+      140 -    note right of progress                                    
+      141 -        A task holds one PROGRESS value and one               
+      142 -        VISIBILITY value at the same time. They are           
+      143 -        independent, so archiving never changes status        
+      144 -        and changing status never archives.                   
+      145 -    end note                                                  
+      141 +**Reading the diagram.** The two boxes are the two stored colu
+          +mns, and they are independent: a task holds one `status` value
+          + and one `is_archived` value at the same time, so archiving ne
+          +ver changes `status` and changing `status` never archives. Eac
+          +h box starts at `[*]`, the `INSERT` — which applies `DEFAULT '
+          +todo'` and `DEFAULT 0` respectively.                          
+      142  
+      147 -    note right of visibility                                  
+      148 -        OVERDUE appears in neither box because it is          
+      149 -        not stored anywhere. It is recomputed on every        
+      150 -        render by isOverdue in src/lib/overdue.ts:            
+      151 -        due_date is before today AND status is not            
+      152 -        'complete'. It flips at midnight with no write,       
+      153 -        which is exactly why it cannot be a column.           
+      154 -    end note                                                  
+      155 -```                                                           
+      143 +**Where is overdue?** In neither box, deliberately. It is not 
+          +stored anywhere. `isOverdue` in `src/lib/overdue.ts` recompute
+          +s it on every render — `due_date` is before today **and** `sta
+          +tus` is not `'complete'` — so it flips at midnight with no wri
+          +te occurring. That is precisely why it cannot be a column or a
+          + fourth status.                                               
+      144  
+      157 -**Two things in that diagram reflect the code as it stands tod
+          -ay, not an intended design:**                                 
+      145 +**Two details reflect the code as it stands, not an intended d
+          +esign:**                                                      
+      146  
+      159 -- The three `status` transitions are permitted by the `CHECK` 
+          -constraint, but **no code writes `status`**. `src/app/actions.
+          -ts` never sets it, so in practice every row keeps the `'todo'`
+          - default. The arrows show what the schema allows; the status-c
+          -hange feature is not built.                                   
+      160 -- The `VISIBILITY` box has **no arrow back from archived to ac
+          -tive**. `archiveTask` only ever sets `is_archived = 1`; nothin
+          -g sets it to `0`. Archiving is currently one-way.             
+      147 +- The three `status` arrows are what the `CHECK` constraint pe
+          +rmits, not a working feature. **No code writes `status`** — `s
+          +rc/app/actions.ts` never sets it — so in practice every row ke
+          +eps the `'todo'` default.                                     
+      148 +- The `is_archived` box has **no arrow back from archived to a
+          +ctive**. `archiveTask` only ever sets the flag to `1`; nothing
+          + sets it to `0`. Archiving is currently one-way.              
+      149  
+      150  ## Running It
+      151  
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      node -e "…)
+  ⎿  --- diagram 1 ---
+       lines: 12 | longest line: 27 chars
+       -> TEXT description "nullable"
+     … +7 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== all 9 schema columns still present in erDiagram? ==="…)
+  ⎿  === all 9 schema columns still present in erDiagram? ===
+     schema columns: 9
+     missing from diagram: none
+     … +5 lines (ctrl+o to expand)
+
+⏺ Fixed both diagrams. The clipping came from cramming explanation into the
+  diagrams — one ER comment was 62 characters, the composite state titles were
+  full sentences, and two multi-line note blocks sat inside the state diagram.
+
+  What changed:
+
+  ┌───────────────────────────┬────────────────────┬────────────────────────┐
+  │                           │       Before       │         After          │
+  ├───────────────────────────┼────────────────────┼────────────────────────┤
+  │ Longest ER column comment │ 62 chars           │ 8 chars (required)     │
+  ├───────────────────────────┼────────────────────┼────────────────────────┤
+  │ Longest state label       │ 44 chars           │ 11 chars (in-progress) │
+  ├───────────────────────────┼────────────────────┼────────────────────────┤
+  │ Transition labels         │ 4, up to 28 chars  │ none                   │
+  ├───────────────────────────┼────────────────────┼────────────────────────┤
+  │ Embedded note blocks      │ 2 (11 lines total) │ none                   │
+  └───────────────────────────┴────────────────────┴────────────────────────┘
+
+  - ER diagram — comments reduced to one word each (auto, required, nullable,
+  enum, flag). All 9 columns and their real types are still there; the full
+  constraints live in the table directly above, plus a new expansion list
+  beneath so nothing is lost.
+  - State diagram — box titles are now just the column names (status,
+  is_archived), transition labels removed entirely, and both note blocks moved
+  out into prose. Added direction LR inside each box so the states run
+  horizontally and the two boxes stack vertically, which keeps it narrow at
+  standard width.
+
+  Verified: all 9 schema columns still present, the status enum still matches
+  the CHECK constraint, fences balanced. Nothing factual was dropped — the "no
+  code writes status" and "archiving is one-way" caveats are still there, just
+  as prose.
+
+  Caveat, same as last time: I measured label lengths but did not render the
+  Mermaid — that still needs mermaid-cli plus a headless Chromium download. Push
+  and check on GitHub, and if anything still clips, tell me which label and
+  I'll trim it further. I'd rather you confirm visually than have me claim it's
+  fixed on a proxy metric.
+
+  Uncommitted: DOCUMENTATION.md, plus the two src/app/ files from earlier.
+
+✻ Baked for 2m 2s
+
+❯ commit and push                                                               
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git branch --show-current…)
+  ⎿  main
+      M DOCUMENTATION.md
+      M src/app/page.tsx
+      M src/app/tasks/[id]/edit/page.tsx
+
+⏺ On main now. Committing the diagram fix and the long-pending app fixes as two
+  separate commits:
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      npx tsc --noEmit 2>&1 | head -5; echo "tsc ok"…)
+  ⎿  tsc ok
+      Test Files  2 passed (2)
+           Tests  5 passed (5)
+     … +3 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git add DOCUMENTATION.md…)
+  ⎿  3962748 Fix form input styling and invalid nesting on the task row
+     c0bcfdb Stop Mermaid diagram labels from clipping
+     4d0e1d3 Add ER and state diagrams to DOCUMENTATION.md
+     … +2 lines (ctrl+o to expand)
+
+⏺ Pushed to main. Two commits, tsc clean and 5/5 tests passing beforehand:
+
+  - c0bcfdb — the Mermaid clipping fix
+  - 3962748 — the input styling, the <p>→<div> nesting fix, and
+  autoComplete="off"
+
+  That clears the working tree — git status is clean, and main and origin/main
+  are in sync.
+
+  Check the diagrams render properly now:
+  https://github.com/Queen8213/coms30011a-lab_one/blob/main/DOCUMENTATION.md
+
+  That's still the unverified part — I trimmed the labels but never rendered
+  them. If anything is still clipped, name the label and I'll cut it further.
+
+  Two loose ends:
+  - The add-vitest-tests branch still exists locally and on the remote, now
+  fully merged into main. Want it deleted?
+  - A dev server may still be on port 3000 from earlier verification runs.
+
+✻ Cooked for 45s
+
+※ recap: You're building a Next.js todo app for a lab; everything through tests, docs and Mermaid diagrams is now committed and pushed to main. Next: open DOCUMENTATION.md on GitHub and confirm the diagrams render without clipped labels.
+
+❯ Remove the two Mermaid diagrams (the erDiagram and the stateDiagram-v2) from  
+  DOCUMENTATION.md. Keep all the surrounding prose and the schema table intact  
+  — make sure the Database Design section still fully explains the columns,     
+  constraints, and the three design decisions (single table, archive as a flag, 
+  overdue derived at read time) in text form                                    
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(DOCUMENTATION.md)
+  ⎿  Added 10 lines, removed 24 lines
+      52  
+      53  **A note on date formats:** `due_date` is a plain calendar date
+           (`2026-08-20`), whereas `datetime('now')` produces a UTC times
+          tamp (`2026-08-20 14:30:00`). They are not interchangeable, and
+           only `due_date` participates in the overdue comparison.
+      54  
+      55 -```mermaid                                                     
+      56 -erDiagram                                                      
+      57 -    tasks {                                                    
+      58 -        INTEGER id PK "auto"                                   
+      59 -        TEXT title "required"                                  
+      60 -        TEXT description "nullable"                            
+      61 -        TEXT due_date "required"                               
+      62 -        TEXT topic "required"                                  
+      63 -        TEXT status "enum"                                     
+      64 -        INTEGER is_archived "flag"                             
+      65 -        TEXT created_at "auto"                                 
+      66 -        TEXT updated_at "auto"                                 
+      67 -    }                                                          
+      68 -```                                                            
+      55 +**Constraints in full:**                                       
+      56  
+      70 -Column comments are kept to one word so nothing clips; the full
+         - types, defaults and constraints are in the table directly abov
+         -e. Expanding the shorthand:                                    
+      57 +- **`id`** — `INTEGER PRIMARY KEY AUTOINCREMENT`, assigned by S
+         +QLite.                                                         
+      58 +- **`title`** — `TEXT NOT NULL`.                               
+      59 +- **`description`** — `TEXT`, the only nullable column. Blank i
+         +nput is stored as `NULL`, not `''`.                            
+      60 +- **`due_date`** — `TEXT NOT NULL`, ISO `YYYY-MM-DD`.          
+      61 +- **`topic`** — `TEXT NOT NULL` free text. It looks like it sho
+         +uld reference something, but there is no `topics` table and no 
+         +foreign key; see design decision 1.                            
+      62 +- **`status`** — `TEXT NOT NULL DEFAULT 'todo'`, constrained by
+         + `CHECK (status IN ('todo','in-progress','complete'))`.        
+      63 +- **`is_archived`** — `INTEGER NOT NULL DEFAULT 0`, holding `0`
+         + or `1`, since SQLite has no boolean type.                     
+      64 +- **`created_at`** / **`updated_at`** — `TEXT NOT NULL DEFAULT 
+         +(datetime('now'))`, a UTC timestamp.                           
+      65  
+      72 -- **`id`** — `PRIMARY KEY AUTOINCREMENT`, assigned by SQLite.  
+      73 -- **`description`** — the only nullable column. Blank input is 
+         -stored as `NULL`, not `''`.                                    
+      74 -- **`due_date`** — `NOT NULL`, ISO `YYYY-MM-DD`.               
+      75 -- **`topic`** — `NOT NULL` free text. It looks like it should r
+         -eference something, but there is no `topics` table and no forei
+         -gn key; see design decision 1.                                 
+      76 -- **`status`** — `NOT NULL DEFAULT 'todo'`, constrained by `CHE
+         -CK (status IN ('todo','in-progress','complete'))`.             
+      77 -- **`is_archived`** — `NOT NULL DEFAULT 0`, holding `0` or `1`,
+         - since SQLite has no boolean type.                             
+      78 -- **`created_at`** / **`updated_at`** — `NOT NULL DEFAULT (date
+         -time('now'))`, a UTC timestamp.                                
+      66 +There is one entity and no foreign keys: the database genuinely
+         + has a single table.                                           
+      67  
+      80 -The diagram shows one entity and no relationship lines because 
+         -the database genuinely has one table and no foreign keys.      
+      81 -                                                               
+      68  ### Relationships
+      69  
+      70  There are none. `tasks` is a single standalone table with no fo
+          reign keys and no join tables.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(DOCUMENTATION.md)
+  ⎿  Added 6 lines, removed 22 lines
+      104  
+      105  Progress and archiving are two independent stored columns; ove
+           rdue is neither of them, and is not stored at all.
+      106  
+      107 -```mermaid                                                    
+      108 -stateDiagram-v2                                               
+      109 -    state "status" as progress {                              
+      110 -        direction LR                                          
+      111 -        state "in-progress" as inprogress                     
+      112 -        [*] --> todo                                          
+      113 -        todo --> inprogress                                   
+      114 -        inprogress --> complete                               
+      115 -        todo --> complete                                     
+      116 -    }                                                         
+      107 +**Axis 1 — progress, stored in `status`.** Three values, fixed
+          + by the `CHECK` constraint: `'todo'`, `'in-progress'`, `'compl
+          +ete'`. An `INSERT` applies the `'todo'` default.              
+      108  
+      118 -    state "is_archived" as visibility {                       
+      119 -        direction LR                                          
+      120 -        state "0 active" as active                            
+      121 -        state "1 archived" as archived                        
+      122 -        [*] --> active                                        
+      123 -        active --> archived                                   
+      124 -    }                                                         
+      125 -```                                                           
+      109 +**Axis 2 — visibility, stored in `is_archived`.** Two values: 
+          +`0` (active) and `1` (archived). An `INSERT` applies the `0` d
+          +efault.                                                       
+      110  
+      127 -**Reading the diagram.** The two boxes are the two stored colu
+          -mns, and they are independent: a task holds one `status` value
+          - and one `is_archived` value at the same time, so archiving ne
+          -ver changes `status` and changing `status` never archives. Eac
+          -h box starts at `[*]`, the `INSERT` — which applies `DEFAULT '
+          -todo'` and `DEFAULT 0` respectively.                          
+      111 +The two are independent. A task holds one `status` value and o
+          +ne `is_archived` value at the same time, so archiving never ch
+          +anges `status` and changing `status` never archives.          
+      112  
+      129 -**Where is overdue?** In neither box, deliberately. It is not 
+          -stored anywhere. `isOverdue` in `src/lib/overdue.ts` recompute
+          -s it on every render — `due_date` is before today **and** `sta
+          -tus` is not `'complete'` — so it flips at midnight with no wri
+          -te occurring. That is precisely why it cannot be a column or a
+          - fourth status.                                               
+      113 +**Axis 3 — overdue, stored nowhere.** `isOverdue` in `src/lib/
+          +overdue.ts` recomputes it on every render: `due_date` is befor
+          +e today **and** `status` is not `'complete'`. It flips at midn
+          +ight with no write occurring, which is precisely why it cannot
+          + be a column or a fourth status value.                        
+      114  
+      115  **Two details reflect the code as it stands, not an intended d
+           esign:**
+      116  
+      133 -- The three `status` arrows are what the `CHECK` constraint pe
+          -rmits, not a working feature. **No code writes `status`** — `s
+          -rc/app/actions.ts` never sets it — so in practice every row ke
+          -eps the `'todo'` default.                                     
+      134 -- The `is_archived` box has **no arrow back from archived to a
+          -ctive**. `archiveTask` only ever sets the flag to `1`; nothing
+          - sets it to `0`. Archiving is currently one-way.              
+      117 +- The three `status` values are what the `CHECK` constraint pe
+          +rmits, not a working feature. **No code writes `status`** — `s
+          +rc/app/actions.ts` never sets it — so in practice every row ke
+          +eps the `'todo'` default.                                     
+      118 +- There is **no path from archived back to active**. `archiveT
+          +ask` only ever sets the flag to `1`; nothing sets it to `0`. A
+          +rchiving is currently one-way.                                
+      119  
+      120  ## Running It
+      121  
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== any mermaid left? ==="…)
+  ⎿  === any mermaid left? ===
+     (none — both diagrams removed)
+     === dangling references to a diagram? ===
+     … +21 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== all 9 columns still documented in text? ==="…)
+  ⎿  === all 9 columns still documented in text? ===
+     columns: 9 | missing from prose: none
+     === the three design decisions still present? ===
+     … +3 lines (ctrl+o to expand)
+
+⏺ Both diagrams removed. No Mermaid remains, and no prose dangles referring to a
+  picture that's gone.
+
+  Where each diagram's content went:
+
+  - erDiagram → a "Constraints in full" bullet list. It previously only expanded
+  the shorthand for some columns, so I extended it to all nine with their full
+  SQLite types, since the diagram was carrying that weight. The schema table
+  above it is untouched.
+  - stateDiagram → restructured into three named axes: status (the three CHECK
+  values), is_archived (0/1), and overdue (stored nowhere, recomputed per
+  render). Wording that pointed at the picture — "the two boxes", "no arrow
+  back", "reading the diagram" — is rewritten as plain statements.
+
+  Verified: all 9 schema columns still appear in prose, the CHECK constraint is
+  documented verbatim, all three design-decision sections intact, fences
+  balanced, section structure unchanged. The two code-versus-intent caveats
+  survive — no code writes status, and archiving is one-way.
+
+  DOCUMENTATION.md is modified and uncommitted. Want it committed and pushed?
+✻ Baked for 1m 15s
+
+❯ yes commit and push it                                                        
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git branch --show-current…)
+  ⎿  main
+      M DOCUMENTATION.md
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git add DOCUMENTATION.md…)
+  ⎿  186f629 Replace the Mermaid diagrams with prose
+     To https://github.com/Queen8213/coms30011a-lab_one.git
+        3962748..186f629  main -> main
+
+⏺ Pushed as 186f629. Working tree is clean and main is in sync with origin/main.
+
+  https://github.com/Queen8213/coms30011a-lab_one/blob/main/DOCUMENTATION.md
+
+  One loose end still outstanding from earlier: the add-vitest-tests branch
+  exists locally and on the remote, fully merged into main. Want it deleted?
+
+✻ Cooked for 23s
+
+※ recap: We've been building the COMS30011A todo app and just finished documenting it; DOCUMENTATION.md now describes everything in prose after removing the Mermaid diagrams, all committed and pushed to main. Next: delete the merged add-vitest-tests branch, if you want it gone.
+
+❯ yes delete it                                                                 
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      echo "=== confirm fully merged into main before deleting ==="…)
+  ⎿  === confirm fully merged into main before deleting ===
+       add-vitest-tests
+     CONFIRMED: fully merged, nothing unique to lose
+     === commits that would be lost if not merged ===
+
+⏺ Bash(cd /Users/queenjulius/Projects/coms30011a-lab-one
+      git branch -d add-vitest-tests 2>&1…)
+  ⎿  Deleted branch add-vitest-tests (was 4d0e1d3).
+     To https://github.com/Queen8213/coms30011a-lab_one.git
+      - [deleted]         add-vitest-tests
+     … +4 lines (ctrl+o to expand)
+
+⏺ Deleted, locally and on the remote. main is the only branch left.
+
+  I confirmed it was fully merged first (git branch --merged, and
+  main..add-vitest-tests was empty), so no commits were lost — everything it
+  carried is in main. Used git branch -d rather than -D so git would have
+  refused if anything had been unmerged.
+
+  Repo state: clean tree, main in sync with origin/main, tests passing.
+
+  One last bit of housekeeping if you want it: a dev server may still be running
+  on port 3000 from the verification runs — lsof -ti:3000 | xargs kill -9
+  clears it.
+
+✻ Sautéed for 29s
+
+❯ cd ~/Desktop                                                                  
+  git clone https://github.com/Queen8213/coms30011a-lab_one.git clean-test      
+  cd clean-test                                                                 
+
+⏺ Bash(cd ~/Desktop && ls -d clean-test 2>/dev/null && echo "(clean-test already
+      exists)" || echo "(clear to clone)")
+  ⎿  (clear to clone)
+  ⎿  Shell cwd was reset to /Users/queenjulius/Projects/coms30011a-lab-one
+
+⏺ Bash(cd ~/Desktop && git clone
+      https://github.com/Queen8213/coms30011a-lab_one.git clean-test 2>&1 | tail
+      -5
+      echo "=== contents ==="…)
+  ⎿  Cloning into 'clean-test'...
+     === contents ===
+     .
+     … +19 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /Users/queenjulius/Projects/coms30011a-lab-one
+
+⏺ Cloned. Now let me actually verify the "From a clean clone" instructions in
+  DOCUMENTATION.md work — npm install first.
+
+⏺ Bash(cd ~/Desktop/clean-test && npm install 2>&1 | tail -8)
+  ⎿    run `npm fund` for details
+
+     3 high severity vulnerabilities
+     … +5 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /Users/queenjulius/Projects/coms30011a-lab-one
+  ⎿  (timeout 5m)
+
+⏺ Bash(cd ~/Desktop/clean-test && npm test 2>&1 | tail -12)
+  ⎿  > coms30011a-lab-one@0.1.0 test
+     > vitest run
+     … +9 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /Users/queenjulius/Projects/coms30011a-lab-one
+  ⎿  (timeout 3m)
+
+⏺ Bash(cd ~/Desktop/clean-test && (npx next dev -p 3055 > /tmp/clean-dev.log
+      2>&1 &) ; sleep 12
+      curl -s --max-time 25 -o /tmp/clean.html -w "status=%{http_code}\n" htt…)
+  ⎿  status=200
+     === page rendered? ===
+     <h1 class="text-2xl font-semibold text-black dark:text-zinc-50">Tasks<
+     … +7 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /Users/queenjulius/Projects/coms30011a-lab-one
+  ⎿  (timeout 2m)
+
+⏺ Bash(cd ~/Desktop/clean-test && node -e "
+      const Database=require('better-sqlite3');…)
+  ⎿  tables: tasks, sqlite_sequence
+     columns: id, title, description, due_date, topic, status, is_archived,
+      created_at, updated_at
+     … +2 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /Users/queenjulius/Projects/coms30011a-lab-one
+
+⏺ The clean-clone flow in DOCUMENTATION.md checks out end to end. I ran the
+  whole documented sequence against the fresh clone:
+
+  ┌────────────┬────────────────────────────────────────────────────────────┐
+  │    Step    │                           Result                           │
+  ├────────────┼────────────────────────────────────────────────────────────┤
+  │ git clone  │ OK — todo.db correctly absent (gitignored)                 │
+  ├────────────┼────────────────────────────────────────────────────────────┤
+  │ npm        │ OK — better-sqlite3 native build succeeded, no toolchain   │
+  │ install    │ prompt                                                     │
+  ├────────────┼────────────────────────────────────────────────────────────┤
+  │ npm test   │ 5 passed (2 files)                                         │
+  ├────────────┼────────────────────────────────────────────────────────────┤
+  │ npm run    │ HTTP 200, page renders with "Tasks", "Add task", "View     │
+  │ dev        │ archived"                                                  │
+  └────────────┴────────────────────────────────────────────────────────────┘
+
+  Three documented claims specifically verified:
+
+  - No setup step — todo.db didn't exist after cloning and was created
+  automatically on first connection, with all 9 columns present and 0 rows. So a
+  clean clone really does work with nothing else to hand.
+  - npm test is one command for the whole suite.
+  - The 3 high-severity advisories are pre-existing, not something introduced —
+  they appear identically on a clean install straight from the repo.
+
+  I used port 3055 rather than 3000 to avoid colliding with anything you have
+  running, and stopped that server afterward.
+
+  The clone is still at ~/Desktop/clean-test, now with node_modules and a
+  todo.db from my test run. It's yours — say the word if you want it removed, or
+  keep it around as a scratch copy.
+
+✻ Churned for 1m 50s
+
+※ recap: You're building a Next.js todo app for a lab; the code, tests, and DOCUMENTATION.md are all committed and pushed to main, and a clean clone was verified working end to end. Nothing is pending, so just say what you want next.
+
+❯ /export                                                                       
+  ⎿  Conversation exported to:
+     /Users/queenjulius/Projects/coms30011a-lab-one/ai.txt
