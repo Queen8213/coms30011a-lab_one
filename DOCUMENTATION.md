@@ -52,32 +52,18 @@ The schema lives in `src/lib/schema.ts` and is applied by `src/lib/db.ts` on con
 
 **A note on date formats:** `due_date` is a plain calendar date (`2026-08-20`), whereas `datetime('now')` produces a UTC timestamp (`2026-08-20 14:30:00`). They are not interchangeable, and only `due_date` participates in the overdue comparison.
 
-```mermaid
-erDiagram
-    tasks {
-        INTEGER id PK "auto"
-        TEXT title "required"
-        TEXT description "nullable"
-        TEXT due_date "required"
-        TEXT topic "required"
-        TEXT status "enum"
-        INTEGER is_archived "flag"
-        TEXT created_at "auto"
-        TEXT updated_at "auto"
-    }
-```
+**Constraints in full:**
 
-Column comments are kept to one word so nothing clips; the full types, defaults and constraints are in the table directly above. Expanding the shorthand:
+- **`id`** — `INTEGER PRIMARY KEY AUTOINCREMENT`, assigned by SQLite.
+- **`title`** — `TEXT NOT NULL`.
+- **`description`** — `TEXT`, the only nullable column. Blank input is stored as `NULL`, not `''`.
+- **`due_date`** — `TEXT NOT NULL`, ISO `YYYY-MM-DD`.
+- **`topic`** — `TEXT NOT NULL` free text. It looks like it should reference something, but there is no `topics` table and no foreign key; see design decision 1.
+- **`status`** — `TEXT NOT NULL DEFAULT 'todo'`, constrained by `CHECK (status IN ('todo','in-progress','complete'))`.
+- **`is_archived`** — `INTEGER NOT NULL DEFAULT 0`, holding `0` or `1`, since SQLite has no boolean type.
+- **`created_at`** / **`updated_at`** — `TEXT NOT NULL DEFAULT (datetime('now'))`, a UTC timestamp.
 
-- **`id`** — `PRIMARY KEY AUTOINCREMENT`, assigned by SQLite.
-- **`description`** — the only nullable column. Blank input is stored as `NULL`, not `''`.
-- **`due_date`** — `NOT NULL`, ISO `YYYY-MM-DD`.
-- **`topic`** — `NOT NULL` free text. It looks like it should reference something, but there is no `topics` table and no foreign key; see design decision 1.
-- **`status`** — `NOT NULL DEFAULT 'todo'`, constrained by `CHECK (status IN ('todo','in-progress','complete'))`.
-- **`is_archived`** — `NOT NULL DEFAULT 0`, holding `0` or `1`, since SQLite has no boolean type.
-- **`created_at`** / **`updated_at`** — `NOT NULL DEFAULT (datetime('now'))`, a UTC timestamp.
-
-The diagram shows one entity and no relationship lines because the database genuinely has one table and no foreign keys.
+There is one entity and no foreign keys: the database genuinely has a single table.
 
 ### Relationships
 
@@ -118,34 +104,18 @@ Deriving it also keeps the rule in one place: the `status !== 'complete'` clause
 
 Progress and archiving are two independent stored columns; overdue is neither of them, and is not stored at all.
 
-```mermaid
-stateDiagram-v2
-    state "status" as progress {
-        direction LR
-        state "in-progress" as inprogress
-        [*] --> todo
-        todo --> inprogress
-        inprogress --> complete
-        todo --> complete
-    }
+**Axis 1 — progress, stored in `status`.** Three values, fixed by the `CHECK` constraint: `'todo'`, `'in-progress'`, `'complete'`. An `INSERT` applies the `'todo'` default.
 
-    state "is_archived" as visibility {
-        direction LR
-        state "0 active" as active
-        state "1 archived" as archived
-        [*] --> active
-        active --> archived
-    }
-```
+**Axis 2 — visibility, stored in `is_archived`.** Two values: `0` (active) and `1` (archived). An `INSERT` applies the `0` default.
 
-**Reading the diagram.** The two boxes are the two stored columns, and they are independent: a task holds one `status` value and one `is_archived` value at the same time, so archiving never changes `status` and changing `status` never archives. Each box starts at `[*]`, the `INSERT` — which applies `DEFAULT 'todo'` and `DEFAULT 0` respectively.
+The two are independent. A task holds one `status` value and one `is_archived` value at the same time, so archiving never changes `status` and changing `status` never archives.
 
-**Where is overdue?** In neither box, deliberately. It is not stored anywhere. `isOverdue` in `src/lib/overdue.ts` recomputes it on every render — `due_date` is before today **and** `status` is not `'complete'` — so it flips at midnight with no write occurring. That is precisely why it cannot be a column or a fourth status.
+**Axis 3 — overdue, stored nowhere.** `isOverdue` in `src/lib/overdue.ts` recomputes it on every render: `due_date` is before today **and** `status` is not `'complete'`. It flips at midnight with no write occurring, which is precisely why it cannot be a column or a fourth status value.
 
 **Two details reflect the code as it stands, not an intended design:**
 
-- The three `status` arrows are what the `CHECK` constraint permits, not a working feature. **No code writes `status`** — `src/app/actions.ts` never sets it — so in practice every row keeps the `'todo'` default.
-- The `is_archived` box has **no arrow back from archived to active**. `archiveTask` only ever sets the flag to `1`; nothing sets it to `0`. Archiving is currently one-way.
+- The three `status` values are what the `CHECK` constraint permits, not a working feature. **No code writes `status`** — `src/app/actions.ts` never sets it — so in practice every row keeps the `'todo'` default.
+- There is **no path from archived back to active**. `archiveTask` only ever sets the flag to `1`; nothing sets it to `0`. Archiving is currently one-way.
 
 ## Running It
 
