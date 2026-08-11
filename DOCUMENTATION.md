@@ -52,6 +52,23 @@ The schema lives in `src/lib/schema.ts` and is applied by `src/lib/db.ts` on con
 
 **A note on date formats:** `due_date` is a plain calendar date (`2026-08-20`), whereas `datetime('now')` produces a UTC timestamp (`2026-08-20 14:30:00`). They are not interchangeable, and only `due_date` participates in the overdue comparison.
 
+```mermaid
+erDiagram
+    tasks {
+        INTEGER id PK "AUTOINCREMENT"
+        TEXT title "NOT NULL"
+        TEXT description "nullable"
+        TEXT due_date "NOT NULL, YYYY-MM-DD"
+        TEXT topic "NOT NULL, free text - not a FK"
+        TEXT status "NOT NULL, DEFAULT 'todo', CHECK IN (todo, in-progress, complete)"
+        INTEGER is_archived "NOT NULL, DEFAULT 0, boolean as 0 or 1"
+        TEXT created_at "NOT NULL, DEFAULT datetime('now')"
+        TEXT updated_at "NOT NULL, DEFAULT datetime('now')"
+    }
+```
+
+The diagram shows a single entity and no relationship lines because the database genuinely has one table and no foreign keys. `topic` looks like it should point at something, but it is plain text — see design decision 1.
+
 ### Relationships
 
 There are none. `tasks` is a single standalone table with no foreign keys and no join tables.
@@ -86,6 +103,51 @@ It is deliberately **not** stored, for two independent reasons.
 **It is a different axis from `status`.** `status` tracks progress (`todo` → `in-progress` → `complete`); overdue tracks timeliness. They are orthogonal — a task can be `in-progress` *and* overdue. Adding `'overdue'` to the status enum would force a single column to carry two independent facts, and recording that a task is overdue would destroy the record of whether work had started.
 
 Deriving it also keeps the rule in one place: the `status !== 'complete'` clause means a finished task is never flagged, however late it was, and the strict `<` means a task due *today* is not yet overdue — it may still be due later in the day.
+
+### The three axes, side by side
+
+Progress and archiving are two independent stored columns; overdue is neither of them, and is not stored at all.
+
+```mermaid
+stateDiagram-v2
+    direction TB
+
+    state "PROGRESS - stored in the status column" as progress {
+        state "in-progress" as inprogress
+        [*] --> todo: INSERT applies DEFAULT 'todo'
+        todo --> inprogress: allowed by CHECK
+        inprogress --> complete: allowed by CHECK
+        todo --> complete: allowed by CHECK
+    }
+
+    state "VISIBILITY - stored in the is_archived column" as visibility {
+        state "is_archived = 0" as active
+        state "is_archived = 1" as archived
+        [*] --> active: INSERT applies DEFAULT 0
+        active --> archived: archiveTask sets the flag to 1
+    }
+
+    note right of progress
+        A task holds one PROGRESS value and one
+        VISIBILITY value at the same time. They are
+        independent, so archiving never changes status
+        and changing status never archives.
+    end note
+
+    note right of visibility
+        OVERDUE appears in neither box because it is
+        not stored anywhere. It is recomputed on every
+        render by isOverdue in src/lib/overdue.ts:
+        due_date is before today AND status is not
+        'complete'. It flips at midnight with no write,
+        which is exactly why it cannot be a column.
+    end note
+```
+
+**Two things in that diagram reflect the code as it stands today, not an intended design:**
+
+- The three `status` transitions are permitted by the `CHECK` constraint, but **no code writes `status`**. `src/app/actions.ts` never sets it, so in practice every row keeps the `'todo'` default. The arrows show what the schema allows; the status-change feature is not built.
+- The `VISIBILITY` box has **no arrow back from archived to active**. `archiveTask` only ever sets `is_archived = 1`; nothing sets it to `0`. Archiving is currently one-way.
 
 ## Running It
 
