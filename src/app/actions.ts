@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import db from "@/lib/db";
+import { TASK_STATUSES, type TaskStatus } from "@/lib/schema";
 
 export async function createTask(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
@@ -54,4 +55,25 @@ export async function archiveTask(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/archived");
+}
+
+export async function updateTaskStatus(formData: FormData) {
+  const id = Number(formData.get("id"));
+  const status = String(formData.get("status") ?? "");
+
+  if (!id) {
+    throw new Error("Task id is required");
+  }
+
+  if (!TASK_STATUSES.includes(status as TaskStatus)) {
+    throw new Error(`Invalid status: ${status}`);
+  }
+
+  db.prepare(
+    `UPDATE tasks
+     SET status = ?, updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(status, id);
+
+  revalidatePath("/");
 }

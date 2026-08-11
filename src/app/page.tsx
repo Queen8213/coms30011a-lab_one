@@ -1,7 +1,8 @@
 import Link from "next/link";
 import db from "@/lib/db";
 import { isOverdue } from "@/lib/overdue";
-import { archiveTask, createTask } from "./actions";
+import { TASK_STATUSES } from "@/lib/schema";
+import { archiveTask, createTask, updateTaskStatus } from "./actions";
 
 type Task = {
   id: number;
@@ -126,6 +127,22 @@ export default async function Home({
                 <p>due_date: {task.due_date}</p>
                 <p>topic: {task.topic}</p>
                 <p>status: {task.status}</p>
+                <form action={updateTaskStatus} className="flex gap-2">
+                  <input type="hidden" name="id" value={task.id} />
+                  {TASK_STATUSES.map((status) => (
+                    <button
+                      key={status}
+                      type="submit"
+                      name="status"
+                      value={status}
+                      disabled={status === task.status}
+                      aria-current={status === task.status}
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:font-semibold disabled:opacity-50 dark:border-zinc-700"
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </form>
                 <div className="flex gap-2">
                   <Link href={`/tasks/${task.id}/edit`}>Edit</Link>
                   <form action={archiveTask}>

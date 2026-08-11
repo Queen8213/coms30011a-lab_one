@@ -1,3 +1,8 @@
+// The three values permitted by the CHECK constraint on tasks.status below.
+// Kept here so the constraint and the application share one definition.
+export const TASK_STATUSES = ["todo", "in-progress", "complete"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
 // Kept separate from db.ts so tests can build a fresh database from the same
 // definition without importing db.ts, which opens todo.db on module load.
 export const SCHEMA = `

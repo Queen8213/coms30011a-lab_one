@@ -104,7 +104,7 @@ Deriving it also keeps the rule in one place: the `status !== 'complete'` clause
 
 Progress and archiving are two independent stored columns; overdue is neither of them, and is not stored at all.
 
-**Axis 1 — progress, stored in `status`.** Three values, fixed by the `CHECK` constraint: `'todo'`, `'in-progress'`, `'complete'`. An `INSERT` applies the `'todo'` default.
+**Axis 1 — progress, stored in `status`.** Three values, fixed by the `CHECK` constraint: `'todo'`, `'in-progress'`, `'complete'`. An `INSERT` applies the `'todo'` default. Any of the three can be set from any other by the `updateTaskStatus` action, which also refreshes `updated_at`; there is no enforced ordering, so a task can go straight from `'todo'` to `'complete'` or back again.
 
 **Axis 2 — visibility, stored in `is_archived`.** Two values: `0` (active) and `1` (archived). An `INSERT` applies the `0` default.
 
@@ -112,10 +112,9 @@ The two are independent. A task holds one `status` value and one `is_archived` v
 
 **Axis 3 — overdue, stored nowhere.** `isOverdue` in `src/lib/overdue.ts` recomputes it on every render: `due_date` is before today **and** `status` is not `'complete'`. It flips at midnight with no write occurring, which is precisely why it cannot be a column or a fourth status value.
 
-**Two details reflect the code as it stands, not an intended design:**
+**The permitted values are defined once.** `TASK_STATUSES` in `src/lib/schema.ts` sits beside the `CHECK` constraint it mirrors, and both the buttons on the task list and the server-side validation in `updateTaskStatus` read from it — so the database constraint and the application cannot drift apart. A submitted status outside those three is rejected by the action before any query runs.
 
-- The three `status` values are what the `CHECK` constraint permits, not a working feature. **No code writes `status`** — `src/app/actions.ts` never sets it — so in practice every row keeps the `'todo'` default.
-- There is **no path from archived back to active**. `archiveTask` only ever sets the flag to `1`; nothing sets it to `0`. Archiving is currently one-way.
+**One detail reflects the code as it stands, not an intended design:** there is **no path from archived back to active**. `archiveTask` only ever sets the flag to `1`; nothing sets it to `0`. Archiving is currently one-way.
 
 ## Running It
 
