@@ -47,6 +47,7 @@ export default async function EditTaskPage({
               type="text"
               defaultValue={task.title}
               required
+              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
             />
           </div>
 
@@ -56,6 +57,7 @@ export default async function EditTaskPage({
               id="description"
               name="description"
               defaultValue={task.description ?? ""}
+              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
             />
           </div>
 
@@ -67,6 +69,7 @@ export default async function EditTaskPage({
               type="date"
               defaultValue={task.due_date}
               required
+              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
             />
           </div>
 
@@ -78,6 +81,7 @@ export default async function EditTaskPage({
               type="text"
               defaultValue={task.topic}
               required
+              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
             />
           </div>
 
