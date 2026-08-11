@@ -55,19 +55,29 @@ The schema lives in `src/lib/schema.ts` and is applied by `src/lib/db.ts` on con
 ```mermaid
 erDiagram
     tasks {
-        INTEGER id PK "AUTOINCREMENT"
-        TEXT title "NOT NULL"
+        INTEGER id PK "auto"
+        TEXT title "required"
         TEXT description "nullable"
-        TEXT due_date "NOT NULL, YYYY-MM-DD"
-        TEXT topic "NOT NULL, free text - not a FK"
-        TEXT status "NOT NULL, DEFAULT 'todo', CHECK IN (todo, in-progress, complete)"
-        INTEGER is_archived "NOT NULL, DEFAULT 0, boolean as 0 or 1"
-        TEXT created_at "NOT NULL, DEFAULT datetime('now')"
-        TEXT updated_at "NOT NULL, DEFAULT datetime('now')"
+        TEXT due_date "required"
+        TEXT topic "required"
+        TEXT status "enum"
+        INTEGER is_archived "flag"
+        TEXT created_at "auto"
+        TEXT updated_at "auto"
     }
 ```
 
-The diagram shows a single entity and no relationship lines because the database genuinely has one table and no foreign keys. `topic` looks like it should point at something, but it is plain text — see design decision 1.
+Column comments are kept to one word so nothing clips; the full types, defaults and constraints are in the table directly above. Expanding the shorthand:
+
+- **`id`** — `PRIMARY KEY AUTOINCREMENT`, assigned by SQLite.
+- **`description`** — the only nullable column. Blank input is stored as `NULL`, not `''`.
+- **`due_date`** — `NOT NULL`, ISO `YYYY-MM-DD`.
+- **`topic`** — `NOT NULL` free text. It looks like it should reference something, but there is no `topics` table and no foreign key; see design decision 1.
+- **`status`** — `NOT NULL DEFAULT 'todo'`, constrained by `CHECK (status IN ('todo','in-progress','complete'))`.
+- **`is_archived`** — `NOT NULL DEFAULT 0`, holding `0` or `1`, since SQLite has no boolean type.
+- **`created_at`** / **`updated_at`** — `NOT NULL DEFAULT (datetime('now'))`, a UTC timestamp.
+
+The diagram shows one entity and no relationship lines because the database genuinely has one table and no foreign keys.
 
 ### Relationships
 
@@ -110,44 +120,32 @@ Progress and archiving are two independent stored columns; overdue is neither of
 
 ```mermaid
 stateDiagram-v2
-    direction TB
-
-    state "PROGRESS - stored in the status column" as progress {
+    state "status" as progress {
+        direction LR
         state "in-progress" as inprogress
-        [*] --> todo: INSERT applies DEFAULT 'todo'
-        todo --> inprogress: allowed by CHECK
-        inprogress --> complete: allowed by CHECK
-        todo --> complete: allowed by CHECK
+        [*] --> todo
+        todo --> inprogress
+        inprogress --> complete
+        todo --> complete
     }
 
-    state "VISIBILITY - stored in the is_archived column" as visibility {
-        state "is_archived = 0" as active
-        state "is_archived = 1" as archived
-        [*] --> active: INSERT applies DEFAULT 0
-        active --> archived: archiveTask sets the flag to 1
+    state "is_archived" as visibility {
+        direction LR
+        state "0 active" as active
+        state "1 archived" as archived
+        [*] --> active
+        active --> archived
     }
-
-    note right of progress
-        A task holds one PROGRESS value and one
-        VISIBILITY value at the same time. They are
-        independent, so archiving never changes status
-        and changing status never archives.
-    end note
-
-    note right of visibility
-        OVERDUE appears in neither box because it is
-        not stored anywhere. It is recomputed on every
-        render by isOverdue in src/lib/overdue.ts:
-        due_date is before today AND status is not
-        'complete'. It flips at midnight with no write,
-        which is exactly why it cannot be a column.
-    end note
 ```
 
-**Two things in that diagram reflect the code as it stands today, not an intended design:**
+**Reading the diagram.** The two boxes are the two stored columns, and they are independent: a task holds one `status` value and one `is_archived` value at the same time, so archiving never changes `status` and changing `status` never archives. Each box starts at `[*]`, the `INSERT` — which applies `DEFAULT 'todo'` and `DEFAULT 0` respectively.
 
-- The three `status` transitions are permitted by the `CHECK` constraint, but **no code writes `status`**. `src/app/actions.ts` never sets it, so in practice every row keeps the `'todo'` default. The arrows show what the schema allows; the status-change feature is not built.
-- The `VISIBILITY` box has **no arrow back from archived to active**. `archiveTask` only ever sets `is_archived = 1`; nothing sets it to `0`. Archiving is currently one-way.
+**Where is overdue?** In neither box, deliberately. It is not stored anywhere. `isOverdue` in `src/lib/overdue.ts` recomputes it on every render — `due_date` is before today **and** `status` is not `'complete'` — so it flips at midnight with no write occurring. That is precisely why it cannot be a column or a fourth status.
+
+**Two details reflect the code as it stands, not an intended design:**
+
+- The three `status` arrows are what the `CHECK` constraint permits, not a working feature. **No code writes `status`** — `src/app/actions.ts` never sets it — so in practice every row keeps the `'todo'` default.
+- The `is_archived` box has **no arrow back from archived to active**. `archiveTask` only ever sets the flag to `1`; nothing sets it to `0`. Archiving is currently one-way.
 
 ## Running It
 
